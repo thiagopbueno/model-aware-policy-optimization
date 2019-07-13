@@ -39,7 +39,7 @@ setup(
     url="",
     packages=find_packages(),
     scripts=[],
-    install_requires=["gym", "ray[rllib]", "tensorflow<2.0.0"],
+    install_requires=["gym", "ray[rllib]", "tensorflow<2.0.0", "pandas", "requests"],
     include_package_data=True,
     zip_safe=False,
     classifiers=[
