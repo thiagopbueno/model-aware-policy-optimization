@@ -1,3 +1,4 @@
+# pylint: disable=missing-docstring
 # This file is part of mapo.
 
 # mapo is free software: you can redistribute it and/or modify
@@ -22,37 +23,33 @@ from mapo.version import __version__
 
 def read(filename):
     filepath = os.path.join(os.path.dirname(__file__), filename)
-    file = open(filepath, 'r')
+    file = open(filepath, "r")
     return file.read()
 
 
 setup(
-    name='mapo',
+    name="mapo",
     version=__version__,
-    author='Thiago P. Bueno, Ângelo G. Lovatto',
-    author_email='thiago.pbueno@gmail.com, angelolovatto@gmail.com',
-    description='MAPO: Model-Aware Policy Optimization',
-    long_description=read('README.md'),
-    license='GNU General Public License v3.0',
-    keywords=['reinforcement-learning', 'model-based', 'rllib', 'tensorflow'],
-    url='',
+    author="Thiago P. Bueno, Ângelo G. Lovatto",
+    author_email="thiago.pbueno@gmail.com, angelolovatto@gmail.com",
+    description="MAPO: Model-Aware Policy Optimization",
+    long_description=read("README.md"),
+    license="GNU General Public License v3.0",
+    keywords=["reinforcement-learning", "model-based", "rllib", "tensorflow"],
+    url="",
     packages=find_packages(),
     scripts=[],
-    install_requires=[
-        'gym',
-        'ray[rllib]',
-        'tensorflow<2.0.0'
-    ],
+    install_requires=["gym", "ray[rllib]", "tensorflow<2.0.0", "pandas", "requests"],
     include_package_data=True,
     zip_safe=False,
     classifiers=[
-        'Development Status :: 3 - Alpha',
-        'Environment :: Console',
-        'Intended Audience :: Science/Research',
-        'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
-        'Natural Language :: English',
-        'Operating System :: OS Independent',
-        'Programming Language :: Python :: 3',
-        'Topic :: Scientific/Engineering :: Artificial Intelligence'
+        "Development Status :: 3 - Alpha",
+        "Environment :: Console",
+        "Intended Audience :: Science/Research",
+        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+        "Natural Language :: English",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python :: 3",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
 )
