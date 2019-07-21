@@ -20,6 +20,13 @@ DEFAULT_CONFIG = with_common_config(
         "critic_hiddens": [64, 64],
         # Hidden layers activation of the critic.
         "critic_hidden_activation": "relu",
+        # === Optimization ===
+        # Learning rate for the critic (Q-function) optimizer.
+        "critic_lr": 1e-3,
+        # Learning rate for the actor (policy) optimizer.
+        "actor_lr": 1e-3,
+        # delayed policy update
+        "policy_delay": 1,
         # === Resources ===
         # Number of actors used for parallelism
         "num_workers": 0,
