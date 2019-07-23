@@ -3,51 +3,62 @@ import tensorflow as tf
 from tensorflow import keras
 from gym.spaces import Box
 
-from ray.rllib.policy import build_tf_policy
-from ray.rllib.models import ModelCatalog
+from ray.rllib.policy import build_tf_policy, TFPolicy
 from ray.rllib.utils.error import UnsupportedSpaceException
+from ray.rllib.utils.annotations import override
 from ray.rllib.policy.sample_batch import SampleBatch
 from ray.rllib.evaluation.postprocessing import compute_advantages, Postprocessing
 
 
-POLICY_SCOPE = "policy"
-Q_SCOPE = "critic"
+def build_actor_critic_losses(policy, batch_tensors):
+    """Contruct actor (DPG) and critic (Fitted Q) tf losses."""
+    # Fitted Q loss (using trajectory returns)
+    obs, actions, returns = (
+        batch_tensors[SampleBatch.CUR_OBS],
+        batch_tensors[SampleBatch.ACTIONS],
+        batch_tensors[Postprocessing.ADVANTAGES],
+    )
+    q_model, policy_model = policy.q_function, policy.policy
+
+    policy.critic_loss = keras.losses.mean_squared_error(
+        q_model([obs, actions]), returns
+    )
+    # DPG loss
+    policy.actor_loss = -tf.reduce_mean(q_model([obs, policy_model(obs)]))
+    return policy.actor_loss + policy.critic_loss
+
+
+def get_default_config():
+    """Get the default configuration for MAPOTFPolicy."""
+    from mapo.agents.mapo.mapo import DEFAULT_CONFIG  # pylint: disable=cyclic-import
+
+    return DEFAULT_CONFIG
 
 
 def postprocess_returns(policy, sample_batch, other_agent_batches=None, episode=None):
-    # pylint: disable=unused-argument
     """Add trajectory returns."""
+    # pylint: disable=unused-argument
     return compute_advantages(sample_batch, 0.0, policy.config["gamma"], use_gae=False)
 
 
-def build_actor_critic_losses(policy, batch_tensors):
-    """Contruct actor (DPG) and critic (Fitted Q) tf losses."""
-    # Q-values for actions & observation in input batch
-    with tf.compat.v1.variable_scope(Q_SCOPE):
-        policy.q_values, policy.q_preprocessor = build_continuous_q_function(
-            policy.get_obs_input_dict(),
-            policy.observation_space,
-            policy.action_space,
-            policy.config,
-        )
-
-    # Fitted Q loss (using trajectory returns)
-    critic_loss = tf.reduce_mean(
-        tf.square(
-            policy.q_values(batch_tensors[SampleBatch.ACTIONS])
-            - batch_tensors[Postprocessing.ADVANTAGES]
-        )
+def actor_critic_gradients(policy, *_):
+    """Create compute gradients ops using separate optimizers."""
+    # pylint: disable=protected-access
+    actor_grads = policy._actor_optimizer.get_gradients(
+        policy.actor_loss, policy.policy.variables
     )
-
-    # DPG loss
-    actor_loss = -tf.reduce_mean(policy.q_values(policy.actions))
-
-    return actor_loss + critic_loss
+    critic_grads = policy._critic_optimizer.get_gradients(
+        policy.critic_loss, policy.q_function.variables
+    )
+    # Save these for later use in build_apply_op
+    policy._actor_grads_and_vars = list(zip(actor_grads, policy.policy.variables))
+    policy._critic_grads_and_vars = list(zip(critic_grads, policy.q_function.variables))
+    return policy._actor_grads_and_vars + policy._critic_grads_and_vars
 
 
 def check_action_space(policy, obs_space, action_space, config):
-    # pylint: disable=unused-argument
     """Check if the action space is suited to DPG."""
+    # pylint: disable=unused-argument
     if not isinstance(action_space, Box):
         raise UnsupportedSpaceException(
             "Action space {} is not supported for MAPO.".format(action_space)
@@ -60,76 +71,96 @@ def check_action_space(policy, obs_space, action_space, config):
         )
 
 
-def build_continuous_q_function(input_dict, obs_space, action_space, config):
-    """Construct the state preprocessor and critic layers."""
-    if config["use_state_preprocessor"]:
-        state_preprocessor = ModelCatalog.get_model(
-            input_dict, obs_space, action_space, 1, config["model"]
-        )
-        processed_obs = state_preprocessor.last_layer
-    else:
-        state_preprocessor = None
-        processed_obs = input_dict[SampleBatch.CUR_OBS]
+def create_separate_optimizers(policy, obs_space, action_space, config):
+    """Initialize optimizers and global step for update operations."""
+    # pylint: disable=unused-argument,protected-access
+    policy._actor_optimizer = keras.optimizers.Adam(learning_rate=config["actor_lr"])
+    policy._critic_optimizer = keras.optimizers.Adam(learning_rate=config["critic_lr"])
+    policy.global_step = tf.Variable(0, trainable=False)
 
+
+def build_continuous_q_function(obs_space, action_space, config):
+    """
+    Construct continuous Q function keras model.
+
+    Assumes both obs_space and action_space are gym.spaces.Box instances.
+    """
+    obs_input = keras.Input(shape=obs_space.shape)
+    action_input = keras.Input(shape=action_space.shape)
     activation = config["critic_hidden_activation"]
-    hiddens = [
-        keras.layers.Dense(units=hidden, activation=activation)
-        for hidden in config["critic_hiddens"]
-    ]
-    layers = hiddens + [keras.layers.Dense(units=1, activation=None)]
-    model = keras.Sequential(layers=layers)
 
-    def evaluate_actions(actions):
-        return model(tf.concat([processed_obs, actions], axis=1))
-
-    return evaluate_actions, state_preprocessor
+    output = keras.layers.concatenate([obs_input, action_input])
+    for hidden in config["critic_hiddens"]:
+        output = keras.layers.Dense(units=hidden, activation=activation)(output)
+    output = keras.layers.Dense(units=1, activation=None)(output)
+    return keras.Model(inputs=[obs_input, action_input], outputs=output)
 
 
-def build_deterministic_policy(input_dict, obs_space, action_space, config):
-    """Contruct deterministic policy tf graph."""
-    if config["use_state_preprocessor"]:
-        state_preprocessor = ModelCatalog.get_model(
-            input_dict, obs_space, action_space, 1, config["model"]
-        )
-        action_out = state_preprocessor.last_layer
-    else:
-        state_preprocessor = None
-        action_out = input_dict[SampleBatch.CUR_OBS]
+def build_deterministic_policy(obs_space, action_space, config):
+    """
+    Contruct deterministic policy keras model.
 
+    Assumes both obs_space and action_space are gym.spaces.Box instances.
+    """
+
+    policy_input = keras.Input(shape=obs_space.shape)
     activation = config["actor_hidden_activation"]
+    policy_out = policy_input
     for hidden in config["actor_hiddens"]:
-        action_out = keras.layers.Dense(units=hidden, activation=activation)(action_out)
-    action_out = keras.layers.Dense(units=action_space.shape[0], activation=None)(
-        action_out
-    )
+        policy_out = keras.layers.Dense(units=hidden, activation=activation)(policy_out)
 
-    # Use sigmoid to scale to [0,1], but also double magnitude of input to
-    # emulate behaviour of tanh activation used in DDPG and TD3 papers.
-    sigmoid_out = tf.nn.sigmoid(2 * action_out)
+    # Use sigmoid to scale to [0,1].
+    policy_out = keras.layers.Dense(units=action_space.shape[0], activation="sigmoid")(
+        policy_out
+    )
     # Rescale to actual env policy scale
-    # (shape of sigmoid_out is [batch_size, dim_actions], so we reshape to
+    # (shape of policy_out is [batch_size, dim_actions], so we reshape to
     # get same dims)
     action_range = (action_space.high - action_space.low)[None]
     low_action = action_space.low[None]
-    actions = action_range * sigmoid_out + low_action
+    policy_out = action_range * policy_out + low_action
+    return keras.Model(inputs=policy_input, outputs=policy_out)
 
-    return actions, state_preprocessor
+
+def build_actor_critic_models(policy, input_dict, obs_space, action_space, config):
+    """Construct actor and critic keras models, and return actor action tensor."""
+    policy.q_function = build_continuous_q_function(obs_space, action_space, config)
+    policy.policy = build_deterministic_policy(obs_space, action_space, config)
+
+    actions = policy.policy(input_dict[SampleBatch.CUR_OBS])
+    return actions, None
 
 
-def build_actor_action_ops(policy, input_dict, obs_space, action_space, config):
-    """Construct action sampling tf ops."""
-    with tf.compat.v1.variable_scope(POLICY_SCOPE):
-        policy.actions, policy.policy_preprocessor = build_deterministic_policy(
-            input_dict, obs_space, action_space, config
+class DelayedUpdatesMixin:  # pylint: disable=too-few-public-methods
+    """
+    Sets ops to update models with different frequencies.
+
+    This mixin is needed since `build_tf_policy` does not have an argument to
+    override `TFPolicy.build_apply_op`.
+    """
+
+    @override(TFPolicy)
+    def build_apply_op(self, *_):
+        """
+        Update actor and critic models with different frequencies.
+
+        For policy gradient, update policy net one time v.s. update critic net
+        `policy_delay` time(s).
+        """
+        should_apply_actor_opt = tf.equal(
+            tf.math.mod(self.global_step, self.config["policy_delay"]), 0
         )
-    return policy.actions, None
 
+        def make_apply_op():
+            return self._actor_optimizer.apply_gradients(self._actor_grads_and_vars)
 
-def get_default_config():
-    """Get the default configuration for MAPOTFPolicy."""
-    from mapo.agents.mapo.mapo import DEFAULT_CONFIG  # pylint: disable=cyclic-import
-
-    return DEFAULT_CONFIG
+        actor_op = tf.cond(
+            should_apply_actor_opt, true_fn=make_apply_op, false_fn=tf.no_op
+        )
+        critic_op = self._critic_optimizer.apply_gradients(self._critic_grads_and_vars)
+        # increment global step & apply ops
+        with tf.control_dependencies([self.global_step.assign_add(1)]):
+            return tf.group(actor_op, critic_op)
 
 
 MAPOTFPolicy = build_tf_policy(
@@ -137,7 +168,10 @@ MAPOTFPolicy = build_tf_policy(
     loss_fn=build_actor_critic_losses,
     get_default_config=get_default_config,
     postprocess_fn=postprocess_returns,
+    optimizer_fn=lambda *_: None,
+    gradients_fn=actor_critic_gradients,
     before_init=check_action_space,
-    make_action_sampler=build_actor_action_ops,
-    # optimizer_fn=lambda: None,
+    before_loss_init=create_separate_optimizers,
+    make_action_sampler=build_actor_critic_models,
+    mixins=[DelayedUpdatesMixin],
 )
