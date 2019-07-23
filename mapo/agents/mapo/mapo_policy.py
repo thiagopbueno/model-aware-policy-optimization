@@ -9,6 +9,9 @@ from ray.rllib.utils.annotations import override
 from ray.rllib.policy.sample_batch import SampleBatch
 from ray.rllib.evaluation.postprocessing import compute_advantages, Postprocessing
 
+from mapo.models.policy import build_deterministic_policy
+from mapo.models.q_function import build_continuous_q_function
+
 
 def build_actor_critic_losses(policy, batch_tensors):
     """Contruct actor (DPG) and critic (Fitted Q) tf losses."""
@@ -77,49 +80,6 @@ def create_separate_optimizers(policy, obs_space, action_space, config):
     policy._actor_optimizer = keras.optimizers.Adam(learning_rate=config["actor_lr"])
     policy._critic_optimizer = keras.optimizers.Adam(learning_rate=config["critic_lr"])
     policy.global_step = tf.Variable(0, trainable=False)
-
-
-def build_continuous_q_function(obs_space, action_space, config):
-    """
-    Construct continuous Q function keras model.
-
-    Assumes both obs_space and action_space are gym.spaces.Box instances.
-    """
-    obs_input = keras.Input(shape=obs_space.shape)
-    action_input = keras.Input(shape=action_space.shape)
-    activation = config["critic_hidden_activation"]
-
-    output = keras.layers.concatenate([obs_input, action_input])
-    for hidden in config["critic_hiddens"]:
-        output = keras.layers.Dense(units=hidden, activation=activation)(output)
-    output = keras.layers.Dense(units=1, activation=None)(output)
-    return keras.Model(inputs=[obs_input, action_input], outputs=output)
-
-
-def build_deterministic_policy(obs_space, action_space, config):
-    """
-    Contruct deterministic policy keras model.
-
-    Assumes both obs_space and action_space are gym.spaces.Box instances.
-    """
-
-    policy_input = keras.Input(shape=obs_space.shape)
-    activation = config["actor_hidden_activation"]
-    policy_out = policy_input
-    for hidden in config["actor_hiddens"]:
-        policy_out = keras.layers.Dense(units=hidden, activation=activation)(policy_out)
-
-    # Use sigmoid to scale to [0,1].
-    policy_out = keras.layers.Dense(units=action_space.shape[0], activation="sigmoid")(
-        policy_out
-    )
-    # Rescale to actual env policy scale
-    # (shape of policy_out is [batch_size, dim_actions], so we reshape to
-    # get same dims)
-    action_range = (action_space.high - action_space.low)[None]
-    low_action = action_space.low[None]
-    policy_out = action_range * policy_out + low_action
-    return keras.Model(inputs=policy_input, outputs=policy_out)
 
 
 def build_actor_critic_models(policy, input_dict, obs_space, action_space, config):
