@@ -21,12 +21,15 @@ def build_actor_critic_losses(policy, batch_tensors):
         batch_tensors[SampleBatch.DONES],
         batch_tensors[SampleBatch.NEXT_OBS],
     )
-    q_model, policy_model = policy.q_model, policy.policy_model
+    q_model = policy.q_model
+    target_q_model = policy.target_q_model
+    policy_model = policy.policy_model
+    target_policy_model = policy.target_policy_model
 
     gamma = policy.config["gamma"]
     # Do not bootstrap if the state is terminal
     bootstrapped = tf.squeeze(
-        rewards + gamma * q_model([next_obs, policy_model(next_obs)])
+        rewards + gamma * target_q_model([next_obs, target_policy_model(next_obs)])
     )
     q_targets = tf.compat.v1.where(dones, x=rewards, y=bootstrapped)
     policy.critic_loss = keras.losses.mean_squared_error(
@@ -83,13 +86,52 @@ def create_separate_optimizers(policy, obs_space, action_space, config):
     policy.global_step = tf.Variable(0, trainable=False)
 
 
+def copy_targets(policy, obs_space, action_space, config):
+    """Copy parameters from original models to target models."""
+    # pylint: disable=unused-argument
+    policy.target_init = tf.group(
+        policy.build_update_target_actor_op(tau=1),
+        policy.build_update_target_critic_op(tau=1),
+    )
+    policy.get_session().run(policy.target_init)
+
+
 def build_actor_critic_models(policy, input_dict, obs_space, action_space, config):
     """Construct actor and critic keras models, and return actor action tensor."""
     policy.q_model = build_continuous_q_function(obs_space, action_space, config)
     policy.policy_model = build_deterministic_policy(obs_space, action_space, config)
-
+    policy.target_q_model = build_continuous_q_function(obs_space, action_space, config)
+    policy.target_policy_model = build_deterministic_policy(
+        obs_space, action_space, config
+    )
     actions = policy.policy_model(input_dict[SampleBatch.CUR_OBS])
     return actions, None
+
+
+class TargetUpdatesMixin:
+    """Adds methods to build ops that update target networks."""
+
+    def build_update_target_actor_op(self, tau=None):
+        """Build op to update target actor network."""
+        tau = tau or self.config["tau"]
+        actor_variables = self.policy_model.variables
+        target_actor_variables = self.target_policy_model.variables
+        update_target_expr = [
+            target_var.assign(tau * var + (1.0 - tau) * target_var)
+            for var, target_var in zip(actor_variables, target_actor_variables)
+        ]
+        return tf.group(*update_target_expr)
+
+    def build_update_target_critic_op(self, tau=None):
+        """Build op to update target critic network."""
+        tau = tau or self.config["tau"]
+        critic_variables = self.q_model.variables
+        target_critic_variables = self.target_q_model.variables
+        update_target_expr = [
+            target_var.assign(tau * var + (1.0 - tau) * target_var)
+            for var, target_var in zip(critic_variables, target_critic_variables)
+        ]
+        return tf.group(*update_target_expr)
 
 
 class DelayedUpdatesMixin:  # pylint: disable=too-few-public-methods
@@ -108,17 +150,27 @@ class DelayedUpdatesMixin:  # pylint: disable=too-few-public-methods
         For policy gradient, update policy net one time v.s. update critic net
         `policy_delay` time(s).
         """
+        # Actor updates
         should_apply_actor_opt = tf.equal(
             tf.math.mod(self.global_step, self.config["policy_delay"]), 0
         )
 
-        def make_apply_op():
-            return self._actor_optimizer.apply_gradients(self._actor_grads_and_vars)
+        def make_actor_apply_op():
+            app_grad = self._actor_optimizer.apply_gradients(self._actor_grads_and_vars)
+            with tf.control_dependencies([app_grad]):
+                update_target_op = self.build_update_target_actor_op()
+            return tf.group(app_grad, update_target_op)
 
         actor_op = tf.cond(
-            should_apply_actor_opt, true_fn=make_apply_op, false_fn=tf.no_op
+            should_apply_actor_opt, true_fn=make_actor_apply_op, false_fn=tf.no_op
         )
-        critic_op = self._critic_optimizer.apply_gradients(self._critic_grads_and_vars)
+        # Critic updates
+        apply_critic_gradients = self._critic_optimizer.apply_gradients(
+            self._critic_grads_and_vars
+        )
+        with tf.control_dependencies([apply_critic_gradients]):
+            update_target_critic_op = self.build_update_target_critic_op()
+        critic_op = tf.group(apply_critic_gradients, update_target_critic_op)
         # increment global step & apply ops
         with tf.control_dependencies([self.global_step.assign_add(1)]):
             return tf.group(actor_op, critic_op)
@@ -132,7 +184,8 @@ OffMAPOTFPolicy = build_tf_policy(
     gradients_fn=actor_critic_gradients,
     before_init=check_action_space,
     before_loss_init=create_separate_optimizers,
+    after_init=copy_targets,
     make_action_sampler=build_actor_critic_models,
-    mixins=[DelayedUpdatesMixin],
+    mixins=[DelayedUpdatesMixin, TargetUpdatesMixin],
     obs_include_prev_action_reward=False,
 )
