@@ -84,8 +84,12 @@ def create_separate_optimizers(policy, obs_space, action_space, config):
 
 def build_actor_critic_models(policy, input_dict, obs_space, action_space, config):
     """Construct actor and critic keras models, and return actor action tensor."""
-    policy.q_function = build_continuous_q_function(obs_space, action_space, config)
-    policy.policy = build_deterministic_policy(obs_space, action_space, config)
+    policy.q_function = build_continuous_q_function(
+        obs_space, action_space, config["critic_model"]
+    )
+    policy.policy = build_deterministic_policy(
+        obs_space, action_space, config["actor_model"]
+    )
 
     actions = policy.policy(input_dict[SampleBatch.CUR_OBS])
     return actions, None

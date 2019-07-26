@@ -5,6 +5,8 @@ import logging
 from ray.rllib.agents.trainer import with_common_config
 from ray.rllib.agents.trainer_template import build_trainer
 from mapo.agents.mapo.mapo_policy import MAPOTFPolicy
+from mapo.models.q_function import DEFAULT_CONFIG as ACTOR_MODEL_CONFIG
+from mapo.models.policy import DEFAULT_CONFIG as CRITIC_MODEL_CONFIG
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -12,14 +14,8 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 DEFAULT_CONFIG = with_common_config(
     {
         # === Model ===
-        # Process the observation input tensors with these hidden layers.
-        "actor_hiddens": [64, 64],
-        # Hidden layers activation of the policy network
-        "actor_hidden_activation": "relu",
-        # Process the observation and action input tensors with these hidden layers.
-        "critic_hiddens": [64, 64],
-        # Hidden layers activation of the critic.
-        "critic_hidden_activation": "relu",
+        "actor_model": ACTOR_MODEL_CONFIG,
+        "critic_model": CRITIC_MODEL_CONFIG,
         # === Optimization ===
         # Learning rate for the critic (Q-function) optimizer.
         "critic_lr": 1e-3,
