@@ -21,6 +21,21 @@ def _build_critic_targets(policy, batch_tensors):
     gamma = policy.config["gamma"]
     target_q_model = policy.target_q_model
     next_action = policy.target_policy_model(next_obs)
+    if policy.config["smooth_target_policy"]:
+        epsilon = tf.random.normal(
+            tf.shape(next_action), stddev=policy.config["target_noise"]
+        )
+        epsilon = tf.clip_by_value(
+            epsilon,
+            -policy.config["target_noise_clip"],
+            policy.config["target_noise_clip"],
+        )
+        next_action = next_action + epsilon
+        next_action = tf.clip_by_value(
+            next_action,
+            tf.constant(policy.action_space.low),
+            tf.constant(policy.action_space.high),
+        )
     next_q_values = target_q_model([next_obs, next_action])
     if policy.config["twin_q"]:
         target_twin_q_model = policy.target_twin_q_model
