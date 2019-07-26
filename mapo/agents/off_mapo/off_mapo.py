@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 DEFAULT_CONFIG = with_common_config(
     {
         # === Model ===
+        # twin Q-net
+        "twin_q": True,
         # Process the observation input tensors with these hidden layers.
         "actor_hiddens": [400, 300],
         # Hidden layers activation of the policy network
