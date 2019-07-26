@@ -4,39 +4,76 @@ from tensorflow import keras
 from gym.spaces import Box
 
 from ray.rllib.policy import build_tf_policy, TFPolicy
+from ray.rllib.policy.sample_batch import SampleBatch
 from ray.rllib.utils.error import UnsupportedSpaceException
 from ray.rllib.utils.annotations import override
-from ray.rllib.policy.sample_batch import SampleBatch
 
 from mapo.models.policy import build_deterministic_policy
 from mapo.models.q_function import build_continuous_q_function
 
 
-def build_actor_critic_losses(policy, batch_tensors):
-    """Contruct actor (DPG) and critic (Fitted Q) losses."""
-    obs, actions, rewards, dones, next_obs = (
-        batch_tensors[SampleBatch.CUR_OBS],
-        batch_tensors[SampleBatch.ACTIONS],
+def _build_critic_targets(policy, batch_tensors):
+    rewards, dones, next_obs = (
         batch_tensors[SampleBatch.REWARDS],
         batch_tensors[SampleBatch.DONES],
         batch_tensors[SampleBatch.NEXT_OBS],
     )
-    q_model = policy.q_model
-    target_q_model = policy.target_q_model
-    policy_model = policy.policy_model
-    target_policy_model = policy.target_policy_model
-
     gamma = policy.config["gamma"]
+    target_q_model = policy.target_q_model
+    next_action = policy.target_policy_model(next_obs)
+    next_q_values = target_q_model([next_obs, next_action])
+    if policy.config["twin_q"]:
+        target_twin_q_model = policy.target_twin_q_model
+        next_q_values = tf.math.minimum(
+            next_q_values, target_twin_q_model([next_obs, next_action])
+        )
+    bootstrapped = rewards + gamma * tf.squeeze(next_q_values)
     # Do not bootstrap if the state is terminal
-    bootstrapped = tf.squeeze(
-        rewards + gamma * target_q_model([next_obs, target_policy_model(next_obs)])
+    return tf.compat.v1.where(dones, x=rewards, y=bootstrapped)
+
+
+def _build_critic_loss(policy, batch_tensors):
+    obs, actions = (
+        batch_tensors[SampleBatch.CUR_OBS],
+        batch_tensors[SampleBatch.ACTIONS],
     )
-    q_targets = tf.compat.v1.where(dones, x=rewards, y=bootstrapped)
-    policy.critic_loss = keras.losses.mean_squared_error(
-        q_model([obs, actions]), q_targets
-    )
-    # DPG loss
-    policy.actor_loss = -tf.reduce_mean(q_model([obs, policy_model(obs)]))
+    target_q_values = _build_critic_targets(policy, batch_tensors)
+    q_loss_criterion = keras.losses.MeanSquaredError()
+    q_pred = policy.q_model([obs, actions])
+    q_stats = {
+        "q_mean": tf.reduce_mean(q_pred),
+        "q_max": tf.reduce_max(q_pred),
+        "q_min": tf.reduce_min(q_pred),
+    }
+    policy.loss_stats.update(q_stats)
+    critic_loss = q_loss_criterion(q_pred, target_q_values)
+    if policy.config["twin_q"]:
+        twin_q_pred = policy.twin_q_model([obs, actions])
+        twin_q_stats = {
+            "twin_q_mean": tf.reduce_mean(twin_q_pred),
+            "twin_q_max": tf.reduce_max(twin_q_pred),
+            "twin_q_min": tf.reduce_min(twin_q_pred),
+        }
+        policy.loss_stats.update(twin_q_stats)
+        twin_q_loss = q_loss_criterion(twin_q_pred, target_q_values)
+        critic_loss += twin_q_loss
+    return critic_loss
+
+
+def _build_actor_loss(policy, batch_tensors):
+    obs = batch_tensors[SampleBatch.CUR_OBS]
+    q_model = policy.q_model
+    policy_model = policy.policy_model
+    return -tf.reduce_mean(q_model([obs, policy_model(obs)]))
+
+
+def build_actor_critic_losses(policy, batch_tensors):
+    """Contruct actor (DPG) and critic (Fitted Q) losses."""
+    policy.loss_stats = {}
+    policy.critic_loss = _build_critic_loss(policy, batch_tensors)
+    policy.actor_loss = _build_actor_loss(policy, batch_tensors)
+    policy.loss_stats["critic_loss"] = policy.critic_loss
+    policy.loss_stats["actor_loss"] = policy.actor_loss
     return policy.actor_loss + policy.critic_loss
 
 
@@ -48,18 +85,27 @@ def get_default_config():
     return DEFAULT_CONFIG
 
 
+def extra_loss_fetches(policy, _):
+    """Add stats computed along with the loss function."""
+    return policy.loss_stats
+
+
 def actor_critic_gradients(policy, *_):
     """Create compute gradients ops using separate optimizers."""
     # pylint: disable=protected-access
     actor_grads = policy._actor_optimizer.get_gradients(
         policy.actor_loss, policy.policy_model.variables
     )
+
+    critic_variables = policy.q_model.variables
+    if policy.config["twin_q"]:
+        critic_variables += policy.twin_q_model.variables
     critic_grads = policy._critic_optimizer.get_gradients(
-        policy.critic_loss, policy.q_model.variables
+        policy.critic_loss, critic_variables
     )
     # Save these for later use in build_apply_op
     policy._actor_grads_and_vars = list(zip(actor_grads, policy.policy_model.variables))
-    policy._critic_grads_and_vars = list(zip(critic_grads, policy.q_model.variables))
+    policy._critic_grads_and_vars = list(zip(critic_grads, critic_variables))
     return policy._actor_grads_and_vars + policy._critic_grads_and_vars
 
 
@@ -104,6 +150,14 @@ def build_actor_critic_models(policy, input_dict, obs_space, action_space, confi
     policy.target_policy_model = build_deterministic_policy(
         obs_space, action_space, config
     )
+    if config["twin_q"]:
+        policy.twin_q_model = build_continuous_q_function(
+            obs_space, action_space, config
+        )
+        policy.target_twin_q_model = build_continuous_q_function(
+            obs_space, action_space, config
+        )
+
     actions = policy.policy_model(input_dict[SampleBatch.CUR_OBS])
     return actions, None
 
@@ -127,6 +181,9 @@ class TargetUpdatesMixin:
         tau = tau or self.config["tau"]
         critic_variables = self.q_model.variables
         target_critic_variables = self.target_q_model.variables
+        if self.config["twin_q"]:
+            critic_variables.extend(self.twin_q_model.variables)
+            target_critic_variables.extend(self.target_twin_q_model.variables)
         update_target_expr = [
             target_var.assign(tau * var + (1.0 - tau) * target_var)
             for var, target_var in zip(critic_variables, target_critic_variables)
@@ -180,6 +237,7 @@ OffMAPOTFPolicy = build_tf_policy(
     name="OffMAPOTFPolicy",
     loss_fn=build_actor_critic_losses,
     get_default_config=get_default_config,
+    stats_fn=extra_loss_fetches,
     optimizer_fn=lambda *_: None,
     gradients_fn=actor_critic_gradients,
     before_init=check_action_space,
