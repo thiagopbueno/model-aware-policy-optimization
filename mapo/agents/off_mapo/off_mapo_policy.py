@@ -44,7 +44,7 @@ def _build_critic_targets(policy, batch_tensors):
         )
     bootstrapped = rewards + gamma * tf.squeeze(next_q_values)
     # Do not bootstrap if the state is terminal
-    return tf.compat.v1.where(dones, x=rewards, y=bootstrapped)
+    return tf.compat.v2.where(dones, x=rewards, y=bootstrapped)
 
 
 def _build_critic_loss(policy, batch_tensors):
