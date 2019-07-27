@@ -1,4 +1,4 @@
-"""Utilities for contruction policy approximators."""
+"""Utilities for constructing policy approximators."""
 from tensorflow import keras
 from mapo.models.layers import ActionSquashingLayer
 
