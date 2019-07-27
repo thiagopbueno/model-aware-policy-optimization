@@ -124,19 +124,18 @@ def actor_critic_gradients(policy, *_):
     return policy._actor_grads_and_vars + policy._critic_grads_and_vars
 
 
-def check_action_space(policy, obs_space, action_space, config):
-    """Check if the action space is suited to DPG."""
+def extra_action_feed_fn(policy):
+    """Add exploration status to compute_actions feed dict."""
+    return {
+        policy.evaluating: policy.config["evaluate"],
+        policy.pure_exploration_phase: policy.uniform_random,
+    }
+
+
+def setup_early_mixins(policy, obs_space, action_space, config):
+    """Initialize early stateful mixins."""
     # pylint: disable=unused-argument
-    if not isinstance(action_space, Box):
-        raise UnsupportedSpaceException(
-            "Action space {} is not supported for MAPO.".format(action_space)
-        )
-    if len(action_space.shape) > 1:
-        raise UnsupportedSpaceException(
-            "Action space has multiple dimensions {}.".format(action_space.shape)
-            + "Consider reshaping this into a single dimension, using a Tuple action"
-            "space, or the multi-agent API."
-        )
+    ExplorationStateMixin.__init__(policy)
 
 
 def create_separate_optimizers(policy, obs_space, action_space, config):
@@ -154,8 +153,90 @@ def copy_targets(policy, obs_space, action_space, config):
     policy.get_session().run(policy.target_init)
 
 
+def build_action_sampler(policy, input_dict, action_space, config):
+    """Add exploration noise when not evaluating the policy."""
+    deterministic_actions = policy.policy_model(input_dict[SampleBatch.CUR_OBS])
+    policy.evaluating = tf.placeholder(tf.bool, shape=[])
+    policy.pure_exploration_phase = tf.placeholder(tf.bool, shape=[])
+
+    def make_noisy_actions():
+        # shape of deterministic_actions is [None, dim_action]
+        if config["exploration_noise_type"] == "gaussian":
+            # add IID Gaussian noise for exploration, TD3-style
+            normal_sample = tf.random.normal(
+                tf.shape(deterministic_actions),
+                stddev=config["exploration_gaussian_sigma"],
+            )
+            stochastic_actions = tf.clip_by_value(
+                deterministic_actions + normal_sample,
+                action_space.low,
+                action_space.high,
+            )
+        elif config["exploration_noise_type"] == "ou":
+            # add OU noise for exploration, DDPG-style
+            exploration_sample = tf.get_variable(
+                name="ornstein_uhlenbeck",
+                dtype=tf.float32,
+                initializer=lambda: tf.zeros(action_space.shape),
+                trainable=False,
+            )
+            normal_sample = tf.random.normal(action_space.shape, mean=0.0, stddev=1.0)
+            ou_new = (
+                -config["exploration_ou_theta"] * exploration_sample
+                + config["exploration_ou_sigma"] * normal_sample
+            )
+            exploration_value = tf.assign_add(exploration_sample, ou_new)
+            base_scale = config["exploration_ou_noise_scale"]
+            noise = (
+                base_scale * exploration_value * (action_space.high - action_space.low)
+            )
+            stochastic_actions = tf.clip_by_value(
+                deterministic_actions + noise, action_space.low, action_space.high
+            )
+        else:
+            raise ValueError(
+                "Unknown noise type '{}' (try 'ou' or 'gaussian')".format(
+                    config["exploration_noise_type"]
+                )
+            )
+        return stochastic_actions
+
+    def make_uniform_random_actions():
+        # pure random exploration option
+        uniform_random_actions = tf.random.uniform(tf.shape(deterministic_actions))
+        # rescale uniform random actions according to action range
+        tf_range = tf.constant(action_space.high - action_space.low)
+        tf_low = tf.constant(action_space.low)
+        uniform_random_actions = uniform_random_actions * tf_range + tf_low
+        return uniform_random_actions
+
+    def make_exploration_actions():
+        return tf.cond(
+            policy.pure_exploration_phase,
+            true_fn=make_uniform_random_actions,
+            false_fn=make_noisy_actions,
+        )
+
+    return tf.cond(
+        policy.evaluating,
+        true_fn=lambda: deterministic_actions,
+        false_fn=make_exploration_actions,
+    )
+
+
 def build_actor_critic_models(policy, input_dict, obs_space, action_space, config):
     """Construct actor and critic keras models, and return actor action tensor."""
+    if not isinstance(action_space, Box):
+        raise UnsupportedSpaceException(
+            "Action space {} is not supported for MAPO.".format(action_space)
+        )
+    if len(action_space.shape) > 1:
+        raise UnsupportedSpaceException(
+            "Action space has multiple dimensions {}.".format(action_space.shape)
+            + "Consider reshaping this into a single dimension, using a Tuple action"
+            "space, or the multi-agent API."
+        )
+
     policy.q_model = build_continuous_q_function(obs_space, action_space, config)
     policy.policy_model = build_deterministic_policy(obs_space, action_space, config)
     policy.target_q_model = build_continuous_q_function(obs_space, action_space, config)
@@ -176,14 +257,23 @@ def build_actor_critic_models(policy, input_dict, obs_space, action_space, confi
         policy.main_variables += policy.twin_q_model.variables
         policy.target_variables += policy.target_twin_q_model.variables
 
-    actions = policy.policy_model(input_dict[SampleBatch.CUR_OBS])
-    return actions, None
+    return build_action_sampler(policy, input_dict, action_space, config), None
 
 
-class TargetUpdatesMixin:
+class ExplorationStateMixin:  # pylint: disable=too-few-public-methods
+    """Adds method to toggle pure exploration phase."""
+
+    def __init__(self):
+        self.uniform_random = False
+
+    def set_pure_exploration_phase(self, pure_exploration):
+        """Set flag for computing uniform random actions."""
+        self.uniform_random = pure_exploration
+
+
+class TargetUpdatesMixin:  # pylint: disable=too-few-public-methods
     """Adds methods to build ops that update target networks."""
 
-    # pylint: disable=too-few-public-methods
     def build_update_targets_op(self, tau=None):
         """Build op to update target networks."""
         tau = tau or self.config["tau"]
@@ -240,10 +330,11 @@ OffMAPOTFPolicy = build_tf_policy(
     stats_fn=extra_loss_fetches,
     optimizer_fn=lambda *_: None,
     gradients_fn=actor_critic_gradients,
-    before_init=check_action_space,
+    extra_action_feed_fn=extra_action_feed_fn,
+    before_init=setup_early_mixins,
     before_loss_init=create_separate_optimizers,
     after_init=copy_targets,
     make_action_sampler=build_actor_critic_models,
-    mixins=[DelayedUpdatesMixin, TargetUpdatesMixin],
+    mixins=[DelayedUpdatesMixin, TargetUpdatesMixin, ExplorationStateMixin],
     obs_include_prev_action_reward=False,
 )
