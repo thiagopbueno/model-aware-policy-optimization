@@ -7,6 +7,23 @@ from mapo.tests.mock_env import MockEnv
 from mapo.agents.off_mapo.off_mapo_policy import OffMAPOTFPolicy
 
 
+def test_initialization():
+    """Check if target networks are initialized correctly."""
+    worker = RolloutWorker(MockEnv, OffMAPOTFPolicy, policy_config={"policy_delay": 2})
+    policy = worker.get_policy()
+
+    def get_main_target_vars():
+        main_vars = policy.get_session().run(policy.main_variables)
+        target_vars = policy.get_session().run(policy.target_variables)
+        return zip(main_vars, target_vars)
+
+    assert all([np.allclose(main, target) for main, target in get_main_target_vars()])
+    policy.learn_on_batch(worker.sample())
+    assert not all(
+        [np.allclose(main, target) for main, target in get_main_target_vars()]
+    )
+
+
 def test_update_optimizer_global_step():
     """Check that apply operations are run the correct number of times."""
     # pylint: disable=protected-access
