@@ -2,11 +2,13 @@
 import pytest
 import ray
 from ray.tune import register_env
+
 from ray.rllib.tests.test_checkpoint_restore import get_mean_action
 from mapo.tests.mock_env import MockEnv
 from mapo.agents.registry import ALGORITHMS
 
 
+@pytest.mark.skip
 @pytest.mark.parametrize("get_trainer", list(ALGORITHMS.values()))
 def test_checkpoint_restore(tmpdir, get_trainer):
     """
@@ -17,8 +19,12 @@ def test_checkpoint_restore(tmpdir, get_trainer):
     ray.init(ignore_reinit_error=True)
     register_env("test", lambda _: MockEnv({"action_dim": 1}))
     trainer = get_trainer()
-    agent1 = trainer(env="test")
-    agent2 = trainer(env="test")
+
+    def get_agent():
+        return trainer(env="test", config={"train_batch_size": 100, "num_workers": 0})
+
+    agent1 = get_agent()
+    agent2 = get_agent()
 
     for _ in range(3):
         agent1.train()
