@@ -1,4 +1,5 @@
 """Tests regarding exploration features in OffMAPO."""
+# pylint: disable=missing-docstring
 import numpy as np
 import scipy.stats as stats
 from ray.rllib.evaluation import RolloutWorker
@@ -7,8 +8,7 @@ from mapo.tests.mock_env import MockEnv
 from mapo.agents.off_mapo.off_mapo_policy import OffMAPOTFPolicy
 
 
-def test_evaluation():
-    """Check if compute_actions is deterministic when evaluating."""
+def test_deterministic_evaluation():
     worker = RolloutWorker(MockEnv, OffMAPOTFPolicy)
     policy = worker.get_policy()
     policy.evaluate(True)
@@ -23,7 +23,6 @@ def test_evaluation():
 
 
 def test_pure_exploration():
-    """Check if action distribution is uniform using the Kolmogorov-Smirnov test."""
     env = MockEnv({"action_dim": 1})
     ob_space, ac_space = env.observation_space, env.action_space
     policy = OffMAPOTFPolicy(ob_space, ac_space, {})
@@ -43,11 +42,12 @@ def test_pure_exploration():
     assert p_value >= 0.1
 
 
-def test_gaussian_exploration():
-    """Check if action distribution is normal using the Kolmogorov-Smirnov test."""
+def test_iid_gaussian_exploration():
     env = MockEnv({"action_dim": 1})
     policy = OffMAPOTFPolicy(
-        env.observation_space, env.action_space, {"exploration_gaussian_sigma": 0.5}
+        env.observation_space,
+        env.action_space,
+        {"exploration_noise_type": "gaussian", "exploration_gaussian_sigma": 0.5},
     )
 
     obs = env.observation_space.sample()

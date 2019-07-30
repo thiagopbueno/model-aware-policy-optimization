@@ -1,5 +1,5 @@
 """Tests regarding delayed policy updates in OffMAPO."""
-
+# pylint: disable=missing-docstring
 import numpy as np
 from ray.rllib.evaluation import RolloutWorker
 
@@ -7,8 +7,7 @@ from mapo.tests.mock_env import MockEnv
 from mapo.agents.off_mapo.off_mapo_policy import OffMAPOTFPolicy
 
 
-def test_initialization():
-    """Check if target networks are initialized correctly."""
+def test_target_network_initialization():
     worker = RolloutWorker(MockEnv, OffMAPOTFPolicy, policy_config={"policy_delay": 2})
     policy = worker.get_policy()
 
@@ -24,8 +23,7 @@ def test_initialization():
     )
 
 
-def test_update_optimizer_global_step():
-    """Check that apply operations are run the correct number of times."""
+def test_optimizer_global_step_update():
     # pylint: disable=protected-access
     worker = RolloutWorker(MockEnv, OffMAPOTFPolicy, policy_config={"policy_delay": 2})
     policy = worker.get_policy()
@@ -39,8 +37,7 @@ def test_update_optimizer_global_step():
     assert sess.run(policy._critic_optimizer.iterations) == 10
 
 
-def test_actor_updates():
-    """Check that actor variables are only changed at the appropriate intervals."""
+def test_actor_update_frequency():
     worker = RolloutWorker(MockEnv, OffMAPOTFPolicy, policy_config={"policy_delay": 2})
     policy = worker.get_policy()
 
@@ -58,8 +55,7 @@ def test_actor_updates():
             assert all_close
 
 
-def test_target_updates():
-    """Check that target variables are only changed at the appropriate intervals."""
+def test_target_update_frequency():
     worker = RolloutWorker(MockEnv, OffMAPOTFPolicy, policy_config={"policy_delay": 2})
     policy = worker.get_policy()
 
