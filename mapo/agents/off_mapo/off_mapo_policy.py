@@ -100,6 +100,22 @@ def get_default_config():
     return DEFAULT_CONFIG
 
 
+def ignore_timeout_termination(
+    policy, sample_batch, other_agent_batches=None, episode=None
+):
+    """
+    Set last done to false if episode length is greater or equal to the horizon.
+
+    Runs the risk of ignoring other non-timeout terminations that coincide with the
+    preset horizon.
+    """
+    # pylint: disable=unused-argument
+    horizon = policy.config["horizon"]
+    if episode and horizon and episode.length >= horizon:
+        sample_batch[SampleBatch.DONES][-1] = False
+    return sample_batch
+
+
 def extra_loss_fetches(policy, _):
     """Add stats computed along with the loss function."""
     return policy.loss_stats
@@ -342,6 +358,7 @@ OffMAPOTFPolicy = build_tf_policy(
     name="OffMAPOTFPolicy",
     loss_fn=build_actor_critic_losses,
     get_default_config=get_default_config,
+    postprocess_fn=ignore_timeout_termination,
     stats_fn=extra_loss_fetches,
     optimizer_fn=lambda *_: None,
     gradients_fn=actor_critic_gradients,
