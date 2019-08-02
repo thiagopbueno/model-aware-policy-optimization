@@ -39,7 +39,7 @@ def test_pure_exploration():
         return np.squeeze(policy.compute_actions(obs.repeat(size, axis=0), [])[0])
 
     _, p_value = stats.kstest(rvs, cdf, N=2000)
-    assert p_value >= 0.1
+    assert p_value >= 0.05
 
 
 def test_iid_gaussian_exploration():
@@ -64,4 +64,4 @@ def test_iid_gaussian_exploration():
         return np.squeeze(policy.compute_actions(obs[None].repeat(size, axis=0), [])[0])
 
     _, p_value = stats.kstest(rvs, cdf, N=2000)
-    assert p_value >= 0.1
+    assert p_value >= 0.05
