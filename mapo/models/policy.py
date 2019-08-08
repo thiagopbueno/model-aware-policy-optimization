@@ -2,7 +2,7 @@
 from tensorflow import keras
 from mapo.models.layers import ActionSquashingLayer
 
-DEFAULT_CONFIG = {"hidden_activation": "relu", "hidden_units": [400, 300]}
+DEFAULT_CONFIG = {"hidden_activation": "relu", "hidden_units": [64, 64]}
 
 
 def build_deterministic_policy(obs_space, action_space, config=None):
@@ -17,8 +17,8 @@ def build_deterministic_policy(obs_space, action_space, config=None):
     policy_input = keras.Input(shape=obs_space.shape)
     activation = config["hidden_activation"]
     policy_out = policy_input
-    for units in config["hidden_units"]:
-        policy_out = keras.layers.Dense(units=units, activation=activation)(policy_out)
+    for hidden in config["hidden_units"]:
+        policy_out = keras.layers.Dense(units=hidden, activation=activation)(policy_out)
 
     policy_out = keras.layers.Dense(units=action_space.shape[0])(policy_out)
     policy_out = ActionSquashingLayer(action_space)(policy_out)
