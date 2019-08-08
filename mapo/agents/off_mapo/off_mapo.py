@@ -30,12 +30,6 @@ DEFAULT_CONFIG = with_common_config(
         "actor_lr": 1e-3,
         # Update the target by \tau * policy + (1-\tau) * target_policy
         "tau": 0.005,
-        # target policy smoothing
-        "smooth_target_policy": True,
-        # gaussian stddev of target action noise for smoothing
-        "target_noise": 0.2,
-        # target noise limit (bound)
-        "target_noise_clip": 0.5,
         # delayed policy update
         "policy_delay": 2,
         # How many environment steps to take before learning starts.
