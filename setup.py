@@ -41,7 +41,7 @@ setup(
     scripts=[],
     install_requires=[
         "gym",
-        "ray[rllib]==0.7.3",
+        "ray[rllib]==0.7.2",
         "tensorflow<2.0.0",
         "pandas",
         "requests",

@@ -2,21 +2,23 @@
 
 import logging
 
+from ray.rllib.agents.trainer import with_common_config
 from ray.rllib.agents.trainer_template import build_trainer
 from ray.rllib.optimizers import SyncReplayOptimizer
-from ray.rllib.utils import merge_dicts
-from mapo.agents.mapo import DEFAULT_CONFIG as BASE_CONFIG
-from mapo.agents.mapo.off_mapo_policy import OffMAPOTFPolicy
+from mapo.agents.off_mapo.off_mapo_policy import OffMAPOTFPolicy
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-DEFAULT_CONFIG = merge_dicts(
-    BASE_CONFIG,
+DEFAULT_CONFIG = with_common_config(
     {
         # === Model ===
         # twin Q-net
         "twin_q": True,
+        # policy network configuration
+        "actor_model": {},
+        # Q function network configuration
+        "critic_model": {},
         # === Exploration ===
         # valid values: "ou" (time-correlated, like original DDPG paper),
         # "gaussian" (IID, like TD3 paper)
@@ -38,6 +40,10 @@ DEFAULT_CONFIG = merge_dicts(
         # optimization on initial policy parameters.
         "pure_exploration_steps": 1000,
         # === Optimization ===
+        # Learning rate for the critic (Q-function) optimizer.
+        "critic_lr": 1e-3,
+        # Learning rate for the actor (policy) optimizer.
+        "actor_lr": 1e-3,
         # Update the target by \tau * policy + (1-\tau) * target_policy
         "tau": 0.005,
         # target policy smoothing
@@ -50,6 +56,9 @@ DEFAULT_CONFIG = merge_dicts(
         "policy_delay": 2,
         # How many environment steps to take before learning starts.
         "learning_starts": 0,
+        # === Resources ===
+        # Number of actors used for parallelism
+        "num_workers": 0,
         # === Replay buffer ===
         # Size of the replay buffer. Note that if async_updates is set, then
         # each worker will have a replay buffer of this size.
@@ -78,7 +87,7 @@ DEFAULT_CONFIG = merge_dicts(
         "evaluation_config": {"evaluate": True},
         # Turn of exploration noise when evaluating the policy
         "evaluate": False,
-    },
+    }
 )
 
 
