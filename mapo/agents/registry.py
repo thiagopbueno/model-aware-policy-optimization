@@ -7,10 +7,4 @@ def _import_mapo():
     return mapo.MAPOTrainer
 
 
-def _import_off_mapo():
-    from mapo.agents import off_mapo
-
-    return off_mapo.OffMAPOTrainer
-
-
-ALGORITHMS = {"MAPO": _import_mapo, "OffMAPO": _import_off_mapo}
+ALGORITHMS = {"MAPO": _import_mapo}
