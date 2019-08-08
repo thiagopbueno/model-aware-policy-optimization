@@ -127,7 +127,7 @@ def actor_critic_gradients(policy, *_):
 def extra_action_feed_fn(policy):
     """Add exploration status to compute_actions feed dict."""
     return {
-        policy.evaluating: policy.evaluation,
+        policy.evaluating: policy.config["evaluate"],
         policy.pure_exploration_phase: policy.uniform_random,
     }
 
@@ -135,7 +135,7 @@ def extra_action_feed_fn(policy):
 def setup_early_mixins(policy, obs_space, action_space, config):
     """Initialize early stateful mixins."""
     # pylint: disable=unused-argument
-    ExplorationStateMixin.__init__(policy, config["evaluate"])
+    ExplorationStateMixin.__init__(policy)
 
 
 def create_separate_optimizers(policy, obs_space, action_space, config):
@@ -264,17 +264,12 @@ def build_actor_critic_models(policy, input_dict, obs_space, action_space, confi
 class ExplorationStateMixin:  # pylint: disable=too-few-public-methods
     """Adds method to toggle pure exploration phase."""
 
-    def __init__(self, evaluate):
+    def __init__(self):
         self.uniform_random = False
-        self.evaluation = evaluate
 
     def set_pure_exploration_phase(self, pure_exploration):
         """Set flag for computing uniform random actions."""
         self.uniform_random = pure_exploration
-
-    def evaluate(self, evaluate):
-        """Set flag for computing deterministic actions."""
-        self.evaluation = evaluate
 
 
 class TargetUpdatesMixin:  # pylint: disable=too-few-public-methods
