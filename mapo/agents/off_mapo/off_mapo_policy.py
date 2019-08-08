@@ -3,11 +3,13 @@ import tensorflow as tf
 from tensorflow import keras
 from gym.spaces import Box
 
+from ray.rllib.policy import build_tf_policy, TFPolicy
 from ray.rllib.policy.sample_batch import SampleBatch
-from ray.rllib.models.catalog import ModelCatalog
 from ray.rllib.utils.error import UnsupportedSpaceException
+from ray.rllib.utils.annotations import override
 
-from mapo.agents.mapo.mapo_policy import MAPOTFPolicy
+from mapo.models.policy import build_deterministic_policy
+from mapo.models.q_function import build_continuous_q_function
 
 
 def _build_critic_targets(policy, batch_tensors):
@@ -17,8 +19,8 @@ def _build_critic_targets(policy, batch_tensors):
         batch_tensors[SampleBatch.NEXT_OBS],
     )
     gamma = policy.config["gamma"]
-    target_model = policy.target_model
-    next_action = policy.target_model.get_actions(next_obs)
+    target_q_model = policy.target_q_model
+    next_action = policy.target_policy_model(next_obs)
     if policy.config["smooth_target_policy"]:
         epsilon = tf.random.normal(
             tf.shape(next_action), stddev=policy.config["target_noise"]
@@ -32,10 +34,12 @@ def _build_critic_targets(policy, batch_tensors):
         next_action = tf.clip_by_value(
             next_action, policy.action_space.low, policy.action_space.high
         )
-    next_q_values = tf.squeeze(target_model.get_q_values(next_obs, next_action))
+    next_q_values = tf.squeeze(target_q_model([next_obs, next_action]))
     if policy.config["twin_q"]:
-        twin_q_values = target_model.get_twin_q_values(next_obs, next_action)
-        next_q_values = tf.math.minimum(next_q_values, tf.squeeze(twin_q_values))
+        target_twin_q_model = policy.target_twin_q_model
+        next_q_values = tf.math.minimum(
+            next_q_values, tf.squeeze(target_twin_q_model([next_obs, next_action]))
+        )
     # Do not bootstrap if the state is terminal
     bootstrapped = rewards + gamma * next_q_values
     return tf.compat.v2.where(dones, x=rewards, y=bootstrapped)
@@ -48,7 +52,7 @@ def _build_critic_loss(policy, batch_tensors):
     )
     target_q_values = _build_critic_targets(policy, batch_tensors)
     q_loss_criterion = keras.losses.MeanSquaredError()
-    q_pred = tf.squeeze(policy.model.get_q_values(obs, actions))
+    q_pred = tf.squeeze(policy.q_model([obs, actions]))
     q_stats = {
         "q_mean": tf.reduce_mean(q_pred),
         "q_max": tf.reduce_max(q_pred),
@@ -57,7 +61,7 @@ def _build_critic_loss(policy, batch_tensors):
     policy.loss_stats.update(q_stats)
     critic_loss = q_loss_criterion(q_pred, target_q_values)
     if policy.config["twin_q"]:
-        twin_q_pred = tf.squeeze(policy.model.get_twin_q_values(obs, actions))
+        twin_q_pred = tf.squeeze(policy.twin_q_model([obs, actions]))
         twin_q_stats = {
             "twin_q_mean": tf.reduce_mean(twin_q_pred),
             "twin_q_max": tf.reduce_max(twin_q_pred),
@@ -71,8 +75,9 @@ def _build_critic_loss(policy, batch_tensors):
 
 def _build_actor_loss(policy, batch_tensors):
     obs = batch_tensors[SampleBatch.CUR_OBS]
-    policy_action = policy.model.get_actions(obs)
-    policy_action_value = policy.model.get_q_values(obs, policy_action)
+    q_model = policy.q_model
+    policy_model = policy.policy_model
+    policy_action_value = q_model([obs, policy_model(obs)])
     policy.loss_stats["qpi_mean"] = tf.reduce_mean(policy_action_value)
     return -tf.reduce_mean(policy_action_value)
 
@@ -90,7 +95,7 @@ def build_actor_critic_losses(policy, batch_tensors):
 def get_default_config():
     """Get the default configuration for OffMAPOTFPolicy."""
     # pylint: disable=cyclic-import
-    from mapo.agents.mapo.off_mapo import DEFAULT_CONFIG
+    from mapo.agents.off_mapo.off_mapo import DEFAULT_CONFIG
 
     return DEFAULT_CONFIG
 
@@ -116,39 +121,23 @@ def extra_loss_fetches(policy, _):
     return policy.loss_stats
 
 
-def apply_gradients_with_delays(policy, *_):
-    """
-    Update actor and critic models with different frequencies.
-
-    For policy gradient, update policy net one time v.s. update critic net
-    `policy_delay` time(s). Also use `policy_delay` for target networks update.
-    """
+def actor_critic_gradients(policy, *_):
+    """Create compute gradients ops using separate optimizers."""
     # pylint: disable=protected-access
-    with tf.control_dependencies([policy.global_step.assign_add(1)]):
-        # Critic updates
-        critic_op = policy._critic_optimizer.apply_gradients(
-            policy._critic_grads_and_vars
-        )
-        # Actor updates
-        should_apply_actor_opt = tf.equal(
-            tf.math.mod(policy.global_step, policy.config["policy_delay"]), 0
-        )
+    actor_grads = policy._actor_optimizer.get_gradients(
+        policy.actor_loss, policy.policy_model.variables
+    )
 
-        def make_actor_apply_op():
-            return policy._actor_optimizer.apply_gradients(policy._actor_grads_and_vars)
-
-        with tf.control_dependencies([critic_op]):
-            actor_op = tf.cond(
-                should_apply_actor_opt, true_fn=make_actor_apply_op, false_fn=tf.no_op
-            )
-        apply_ops = tf.group(actor_op, critic_op)
-        with tf.control_dependencies([apply_ops]):
-            update_targets_op = tf.cond(
-                should_apply_actor_opt,
-                true_fn=policy.build_update_targets_op,
-                false_fn=tf.no_op,
-            )
-        return tf.group(apply_ops, update_targets_op)
+    critic_variables = policy.q_model.variables
+    if policy.config["twin_q"]:
+        critic_variables += policy.twin_q_model.variables
+    critic_grads = policy._critic_optimizer.get_gradients(
+        policy.critic_loss, critic_variables
+    )
+    # Save these for later use in build_apply_op
+    policy._actor_grads_and_vars = list(zip(actor_grads, policy.policy_model.variables))
+    policy._critic_grads_and_vars = list(zip(critic_grads, critic_variables))
+    return policy._actor_grads_and_vars + policy._critic_grads_and_vars
 
 
 def extra_action_feed_fn(policy):
@@ -165,6 +154,14 @@ def setup_early_mixins(policy, obs_space, action_space, config):
     ExplorationStateMixin.__init__(policy, config["evaluate"])
 
 
+def create_separate_optimizers(policy, obs_space, action_space, config):
+    """Initialize optimizers and global step for update operations."""
+    # pylint: disable=unused-argument,protected-access
+    policy._actor_optimizer = keras.optimizers.Adam(learning_rate=config["actor_lr"])
+    policy._critic_optimizer = keras.optimizers.Adam(learning_rate=config["critic_lr"])
+    policy.global_step = tf.Variable(0, trainable=False)
+
+
 def copy_targets(policy, obs_space, action_space, config):
     """Copy parameters from original models to target models."""
     # pylint: disable=unused-argument
@@ -172,10 +169,9 @@ def copy_targets(policy, obs_space, action_space, config):
     policy.get_session().run(policy.target_init)
 
 
-def build_action_sampler(policy, model, input_dict, obs_space, action_space, config):
+def build_action_sampler(policy, input_dict, action_space, config):
     """Add exploration noise when not evaluating the policy."""
-    # pylint: disable=too-many-arguments,unused-argument
-    deterministic_actions = model.get_actions(input_dict[SampleBatch.CUR_OBS])
+    deterministic_actions = policy.policy_model(input_dict[SampleBatch.CUR_OBS])
     policy.evaluating = tf.placeholder(tf.bool, shape=[])
     policy.pure_exploration_phase = tf.placeholder(tf.bool, shape=[])
 
@@ -237,16 +233,15 @@ def build_action_sampler(policy, model, input_dict, obs_space, action_space, con
             false_fn=make_noisy_actions,
         )
 
-    actions = tf.cond(
+    return tf.cond(
         policy.evaluating,
         true_fn=lambda: deterministic_actions,
         false_fn=make_exploration_actions,
     )
-    return actions, None
 
 
-def build_actor_critic_network(policy, obs_space, action_space, config):
-    """Construct actor and critic keras models, wrapped in the ModelV2 interface."""
+def build_actor_critic_models(policy, input_dict, obs_space, action_space, config):
+    """Construct actor and critic keras models, and return actor action tensor."""
     if not isinstance(action_space, Box):
         raise UnsupportedSpaceException(
             "Action space {} is not supported for MAPO.".format(action_space)
@@ -257,27 +252,29 @@ def build_actor_critic_network(policy, obs_space, action_space, config):
             + "Consider reshaping this into a single dimension, using a Tuple action"
             "space, or the multi-agent API."
         )
-    policy.model = ModelCatalog.get_model_v2(
-        obs_space,
-        action_space,
-        1,
-        model_config=config["model"],
-        framework="tf",
-        name="mapo_model",
-        twin_q=config["twin_q"],
-    )
 
-    policy.target_model = ModelCatalog.get_model_v2(
-        obs_space,
-        action_space,
-        1,
-        model_config=config["model"],
-        framework="tf",
-        name="mapo_model",
-        twin_q=config["twin_q"],
-    )
+    def make_actor():
+        return build_deterministic_policy(
+            obs_space, action_space, config["actor_model"]
+        )
 
-    return policy.model
+    def make_critic():
+        return build_continuous_q_function(
+            obs_space, action_space, config["critic_model"]
+        )
+
+    policy.policy_model, policy.target_policy_model = make_actor(), make_actor()
+    policy.q_model, policy.target_q_model = make_critic(), make_critic()
+    policy.main_variables = policy.policy_model.variables + policy.q_model.variables
+    policy.target_variables = (
+        policy.target_policy_model.variables + policy.target_q_model.variables
+    )
+    if config["twin_q"]:
+        policy.twin_q_model, policy.target_twin_q_model = make_critic(), make_critic()
+        policy.main_variables += policy.twin_q_model.variables
+        policy.target_variables += policy.target_twin_q_model.variables
+
+    return build_action_sampler(policy, input_dict, action_space, config), None
 
 
 class ExplorationStateMixin:  # pylint: disable=too-few-public-methods
@@ -302,8 +299,8 @@ class TargetUpdatesMixin:  # pylint: disable=too-few-public-methods
     def build_update_targets_op(self, tau=None):
         """Build op to update target networks."""
         tau = tau or self.config["tau"]
-        main_variables = self.model.variables()
-        target_variables = self.target_model.variables()
+        main_variables = self.main_variables
+        target_variables = self.target_variables
         update_target_expr = [
             target_var.assign(tau * var + (1.0 - tau) * target_var)
             for var, target_var in zip(main_variables, target_variables)
@@ -311,18 +308,65 @@ class TargetUpdatesMixin:  # pylint: disable=too-few-public-methods
         return tf.group(*update_target_expr)
 
 
-OffMAPOTFPolicy = MAPOTFPolicy.with_updates(  # pylint: disable=invalid-name
+class DelayedUpdatesMixin:  # pylint: disable=too-few-public-methods
+    """
+    Sets ops to update models with different frequencies.
+
+    This mixin is needed since `build_tf_policy` does not have an argument to
+    override `TFPolicy.build_apply_op`.
+    """
+
+    @override(TFPolicy)
+    def build_apply_op(self, *_):
+        """
+        Update actor and critic models with different frequencies.
+
+        For policy gradient, update policy net one time v.s. update critic net
+        `policy_delay` time(s). Also use `policy_delay` for target networks update.
+        """
+        with tf.control_dependencies([self.global_step.assign_add(1)]):
+            # Critic updates
+            critic_op = self._critic_optimizer.apply_gradients(
+                self._critic_grads_and_vars
+            )
+            # Actor updates
+            should_apply_actor_opt = tf.equal(
+                tf.math.mod(self.global_step, self.config["policy_delay"]), 0
+            )
+
+            def make_actor_apply_op():
+                return self._actor_optimizer.apply_gradients(self._actor_grads_and_vars)
+
+            with tf.control_dependencies([critic_op]):
+                actor_op = tf.cond(
+                    should_apply_actor_opt,
+                    true_fn=make_actor_apply_op,
+                    false_fn=tf.no_op,
+                )
+            # increment global step & apply ops
+            apply_ops = tf.group(actor_op, critic_op)
+            with tf.control_dependencies([apply_ops]):
+                update_targets_op = tf.cond(
+                    should_apply_actor_opt,
+                    true_fn=self.build_update_targets_op,
+                    false_fn=tf.no_op,
+                )
+            return tf.group(apply_ops, update_targets_op)
+
+
+OffMAPOTFPolicy = build_tf_policy(
     name="OffMAPOTFPolicy",
     loss_fn=build_actor_critic_losses,
     get_default_config=get_default_config,
     postprocess_fn=ignore_timeout_termination,
     stats_fn=extra_loss_fetches,
-    apply_gradients_fn=apply_gradients_with_delays,
+    optimizer_fn=lambda *_: None,
+    gradients_fn=actor_critic_gradients,
     extra_action_feed_fn=extra_action_feed_fn,
     before_init=setup_early_mixins,
+    before_loss_init=create_separate_optimizers,
     after_init=copy_targets,
-    make_model=build_actor_critic_network,
-    action_sampler_fn=build_action_sampler,
-    mixins=[TargetUpdatesMixin, ExplorationStateMixin],
+    make_action_sampler=build_actor_critic_models,
+    mixins=[DelayedUpdatesMixin, TargetUpdatesMixin, ExplorationStateMixin],
     obs_include_prev_action_reward=False,
 )

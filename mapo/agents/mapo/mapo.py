@@ -4,26 +4,16 @@ import logging
 
 from ray.rllib.agents.trainer import with_common_config
 from ray.rllib.agents.trainer_template import build_trainer
-from ray.rllib.models import MODEL_DEFAULTS
-from ray.rllib.utils import merge_dicts
 from mapo.agents.mapo.mapo_policy import MAPOTFPolicy
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
+
 DEFAULT_CONFIG = with_common_config(
     {
         # === Model ===
-        # actor and critic network configuration
-        "model": merge_dicts(
-            MODEL_DEFAULTS,
-            {
-                "custom_model": "mapo_model",
-                "custom_options": {
-                    "actor": {"hidden_activation": "relu", "hidden_units": [400, 300]},
-                    "critic": {"hidden_activation": "relu", "hidden_units": [400, 300]},
-                },
-            },
-        ),
+        "actor_model": {},
+        "critic_model": {},
         # === Optimization ===
         # Learning rate for the critic (Q-function) optimizer.
         "critic_lr": 1e-3,

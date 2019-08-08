@@ -5,7 +5,7 @@ import scipy.stats as stats
 from ray.rllib.evaluation import RolloutWorker
 
 from mapo.tests.mock_env import MockEnv
-from mapo.agents.mapo.off_mapo_policy import OffMAPOTFPolicy
+from mapo.agents.off_mapo.off_mapo_policy import OffMAPOTFPolicy
 
 
 def test_deterministic_evaluation():
