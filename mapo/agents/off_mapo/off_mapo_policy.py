@@ -135,7 +135,10 @@ def create_separate_optimizers(policy, obs_space, action_space, config):
 def copy_targets(policy, obs_space, action_space, config):
     """Copy parameters from original models to target models."""
     # pylint: disable=unused-argument
-    policy.target_init = policy.build_update_targets_op(tau=1)
+    policy.target_init = tf.group(
+        policy.build_update_target_actor_op(tau=1),
+        policy.build_update_target_critic_op(tau=1),
+    )
     policy.get_session().run(policy.target_init)
 
 
@@ -147,10 +150,6 @@ def build_actor_critic_models(policy, input_dict, obs_space, action_space, confi
     policy.target_policy_model = build_deterministic_policy(
         obs_space, action_space, config
     )
-    policy.main_variables = policy.q_model.variables + policy.policy_model.variables
-    policy.target_variables = (
-        policy.target_q_model.variables + policy.target_policy_model.variables
-    )
     if config["twin_q"]:
         policy.twin_q_model = build_continuous_q_function(
             obs_space, action_space, config
@@ -158,8 +157,6 @@ def build_actor_critic_models(policy, input_dict, obs_space, action_space, confi
         policy.target_twin_q_model = build_continuous_q_function(
             obs_space, action_space, config
         )
-        policy.main_variables += policy.twin_q_model.variables
-        policy.target_variables += policy.target_twin_q_model.variables
 
     actions = policy.policy_model(input_dict[SampleBatch.CUR_OBS])
     return actions, None
@@ -168,15 +165,28 @@ def build_actor_critic_models(policy, input_dict, obs_space, action_space, confi
 class TargetUpdatesMixin:
     """Adds methods to build ops that update target networks."""
 
-    # pylint: disable=too-few-public-methods
-    def build_update_targets_op(self, tau=None):
-        """Build op to update target networks."""
+    def build_update_target_actor_op(self, tau=None):
+        """Build op to update target actor network."""
         tau = tau or self.config["tau"]
-        main_variables = self.main_variables
-        target_variables = self.target_variables
+        actor_variables = self.policy_model.variables
+        target_actor_variables = self.target_policy_model.variables
         update_target_expr = [
             target_var.assign(tau * var + (1.0 - tau) * target_var)
-            for var, target_var in zip(main_variables, target_variables)
+            for var, target_var in zip(actor_variables, target_actor_variables)
+        ]
+        return tf.group(*update_target_expr)
+
+    def build_update_target_critic_op(self, tau=None):
+        """Build op to update target critic network."""
+        tau = tau or self.config["tau"]
+        critic_variables = self.q_model.variables
+        target_critic_variables = self.target_q_model.variables
+        if self.config["twin_q"]:
+            critic_variables.extend(self.twin_q_model.variables)
+            target_critic_variables.extend(self.target_twin_q_model.variables)
+        update_target_expr = [
+            target_var.assign(tau * var + (1.0 - tau) * target_var)
+            for var, target_var in zip(critic_variables, target_critic_variables)
         ]
         return tf.group(*update_target_expr)
 
@@ -195,7 +205,7 @@ class DelayedUpdatesMixin:  # pylint: disable=too-few-public-methods
         Update actor and critic models with different frequencies.
 
         For policy gradient, update policy net one time v.s. update critic net
-        `policy_delay` time(s). Also use `policy_delay` for target networks update.
+        `policy_delay` time(s).
         """
         # Actor updates
         should_apply_actor_opt = tf.equal(
@@ -205,14 +215,19 @@ class DelayedUpdatesMixin:  # pylint: disable=too-few-public-methods
         def make_actor_apply_op():
             app_grad = self._actor_optimizer.apply_gradients(self._actor_grads_and_vars)
             with tf.control_dependencies([app_grad]):
-                update_target_op = self.build_update_targets_op()
+                update_target_op = self.build_update_target_actor_op()
             return tf.group(app_grad, update_target_op)
 
         actor_op = tf.cond(
             should_apply_actor_opt, true_fn=make_actor_apply_op, false_fn=tf.no_op
         )
         # Critic updates
-        critic_op = self._critic_optimizer.apply_gradients(self._critic_grads_and_vars)
+        apply_critic_gradients = self._critic_optimizer.apply_gradients(
+            self._critic_grads_and_vars
+        )
+        with tf.control_dependencies([apply_critic_gradients]):
+            update_target_critic_op = self.build_update_target_critic_op()
+        critic_op = tf.group(apply_critic_gradients, update_target_critic_op)
         # increment global step & apply ops
         with tf.control_dependencies([self.global_step.assign_add(1)]):
             return tf.group(actor_op, critic_op)
