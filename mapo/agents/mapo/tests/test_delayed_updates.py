@@ -4,7 +4,7 @@ import numpy as np
 from ray.rllib.evaluation import RolloutWorker
 
 from mapo.tests.mock_env import MockEnv
-from mapo.agents.off_mapo.off_mapo_policy import OffMAPOTFPolicy
+from mapo.agents.mapo.off_mapo_policy import OffMAPOTFPolicy
 
 
 def test_target_network_initialization():
@@ -12,8 +12,8 @@ def test_target_network_initialization():
     policy = worker.get_policy()
 
     def get_main_target_vars():
-        main_vars = policy.get_session().run(policy.main_variables)
-        target_vars = policy.get_session().run(policy.target_variables)
+        main_vars = policy.get_session().run(policy.model.variables())
+        target_vars = policy.get_session().run(policy.target_model.variables())
         return zip(main_vars, target_vars)
 
     assert all([np.allclose(main, target) for main, target in get_main_target_vars()])
@@ -42,7 +42,7 @@ def test_actor_update_frequency():
     policy = worker.get_policy()
 
     def get_actor_vars():
-        return policy.get_session().run(policy.policy_model.variables)
+        return policy.get_session().run(policy.model.actor_variables)
 
     for iteration in range(1, 7):
         before = get_actor_vars()
@@ -60,7 +60,7 @@ def test_target_update_frequency():
     policy = worker.get_policy()
 
     def get_target_vars():
-        return policy.get_session().run(policy.target_variables)
+        return policy.get_session().run(policy.target_model.variables())
 
     for iteration in range(1, 7):
         before = get_target_vars()
