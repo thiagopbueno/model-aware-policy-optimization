@@ -34,14 +34,14 @@ def _build_critic_targets(policy, batch_tensors):
         next_action = tf.clip_by_value(
             next_action, policy.action_space.low, policy.action_space.high
         )
-    next_q_values = tf.squeeze(target_q_model([next_obs, next_action]))
+    next_q_values = target_q_model([next_obs, next_action])
     if policy.config["twin_q"]:
         target_twin_q_model = policy.target_twin_q_model
         next_q_values = tf.math.minimum(
-            next_q_values, tf.squeeze(target_twin_q_model([next_obs, next_action]))
+            next_q_values, target_twin_q_model([next_obs, next_action])
         )
+    bootstrapped = rewards + gamma * tf.squeeze(next_q_values)
     # Do not bootstrap if the state is terminal
-    bootstrapped = rewards + gamma * next_q_values
     return tf.compat.v2.where(dones, x=rewards, y=bootstrapped)
 
 
@@ -52,7 +52,7 @@ def _build_critic_loss(policy, batch_tensors):
     )
     target_q_values = _build_critic_targets(policy, batch_tensors)
     q_loss_criterion = keras.losses.MeanSquaredError()
-    q_pred = tf.squeeze(policy.q_model([obs, actions]))
+    q_pred = policy.q_model([obs, actions])
     q_stats = {
         "q_mean": tf.reduce_mean(q_pred),
         "q_max": tf.reduce_max(q_pred),
@@ -61,7 +61,7 @@ def _build_critic_loss(policy, batch_tensors):
     policy.loss_stats.update(q_stats)
     critic_loss = q_loss_criterion(q_pred, target_q_values)
     if policy.config["twin_q"]:
-        twin_q_pred = tf.squeeze(policy.twin_q_model([obs, actions]))
+        twin_q_pred = policy.twin_q_model([obs, actions])
         twin_q_stats = {
             "twin_q_mean": tf.reduce_mean(twin_q_pred),
             "twin_q_max": tf.reduce_max(twin_q_pred),
