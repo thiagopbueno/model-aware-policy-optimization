@@ -8,9 +8,9 @@ def _import_mapo():
 
 
 def _import_off_mapo():
-    from mapo.agents import off_mapo
+    from mapo.agents import mapo
 
-    return off_mapo.OffMAPOTrainer
+    return mapo.OffMAPOTrainer
 
 
 ALGORITHMS = {"MAPO": _import_mapo, "OffMAPO": _import_off_mapo}
