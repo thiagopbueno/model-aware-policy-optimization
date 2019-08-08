@@ -6,8 +6,6 @@ from ray.rllib.agents.trainer import with_common_config
 from ray.rllib.agents.trainer_template import build_trainer
 from ray.rllib.optimizers import SyncReplayOptimizer
 from mapo.agents.off_mapo.off_mapo_policy import OffMAPOTFPolicy
-from mapo.models.policy import DEFAULT_CONFIG as ACTOR_MODEL_CONFIG
-from mapo.models.q_function import DEFAULT_CONFIG as CRITIC_MODEL_CONFIG
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -17,10 +15,14 @@ DEFAULT_CONFIG = with_common_config(
         # === Model ===
         # twin Q-net
         "twin_q": True,
-        # policy network configuration
-        "actor_model": ACTOR_MODEL_CONFIG,
-        # Q function network configuration
-        "critic_model": CRITIC_MODEL_CONFIG,
+        # Process the observation input tensors with these hidden layers.
+        "actor_hiddens": [400, 300],
+        # Hidden layers activation of the policy network
+        "actor_hidden_activation": "relu",
+        # Process the observation and action input tensors with these hidden layers.
+        "critic_hiddens": [400, 300],
+        # Hidden layers activation of the critic.
+        "critic_hidden_activation": "relu",
         # === Exploration ===
         # valid values: "ou" (time-correlated, like original DDPG paper),
         # "gaussian" (IID, like TD3 paper)
