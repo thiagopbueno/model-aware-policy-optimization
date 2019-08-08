@@ -8,12 +8,11 @@ class MockEnv(gym.Env):  # pylint: disable=abstract-method
     """Dummy environment with continuous action space."""
 
     def __init__(self, config=None):
-        self.config = config or {"action_dim": 4}
+        self.config = config
         self.horizon = 200
         self.time = 0
         self.observation_space = Box(high=1, low=-1, shape=(4,), dtype=np.float32)
-        action_dim = self.config["action_dim"]
-        self.action_space = Box(high=1, low=-1, shape=(action_dim,), dtype=np.float32)
+        self.action_space = Box(high=1, low=-1, shape=(2,), dtype=np.float32)
 
     def reset(self):
         self.time = 0
