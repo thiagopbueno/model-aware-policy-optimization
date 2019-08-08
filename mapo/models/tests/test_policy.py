@@ -3,7 +3,6 @@ import tensorflow as tf
 from tensorflow import keras
 from mapo.tests.mock_env import MockEnv
 from mapo.models.policy import build_deterministic_policy
-from mapo.models.layers import ActionSquashingLayer
 
 
 def test_shape():
@@ -22,7 +21,4 @@ def test_is_serializable():
     ob_space, ac_space = env.observation_space, env.action_space
     policy_model = build_deterministic_policy(ob_space, ac_space)
     policy_config = policy_model.get_config()
-    keras.Model.from_config(
-        policy_config,
-        custom_objects={ActionSquashingLayer.__name__: ActionSquashingLayer},
-    )
+    keras.Model.from_config(policy_config)
