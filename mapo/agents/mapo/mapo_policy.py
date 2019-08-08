@@ -1,6 +1,5 @@
 """MAPO Tensorflow Policy."""
 import tensorflow as tf
-from tensorflow import keras
 from gym.spaces import Box
 
 from ray.rllib.policy import build_tf_policy
@@ -23,9 +22,10 @@ def postprocess_returns(policy, sample_batch, other_agent_batches=None, episode=
 def build_actor_critic_losses(policy, batch_tensors):
     """Contruct actor (DPG) and critic (Fitted Q) tf losses."""
     # Q-values for actions & observation in input batch
-    with tf.compat.v1.variable_scope(Q_SCOPE):
-        policy.q_values, policy.q_preprocessor = build_continuous_q_function(
-            policy.get_obs_input_dict(),
+    with tf.variable_scope(Q_SCOPE):
+        q_values, policy.q_model = build_continuous_q_function(
+            batch_tensors[SampleBatch.CUR_OBS],
+            batch_tensors[SampleBatch.ACTIONS],
             policy.observation_space,
             policy.action_space,
             policy.config,
@@ -33,14 +33,21 @@ def build_actor_critic_losses(policy, batch_tensors):
 
     # Fitted Q loss (using trajectory returns)
     critic_loss = tf.reduce_mean(
-        tf.square(
-            policy.q_values(batch_tensors[SampleBatch.ACTIONS])
-            - batch_tensors[Postprocessing.ADVANTAGES]
-        )
+        tf.square(q_values - batch_tensors[Postprocessing.ADVANTAGES])
     )
 
+    # Q-values for policy actions calculated from observations in input batch
+    with tf.variable_scope(Q_SCOPE, reuse=True):
+        q_policy_values, _ = build_continuous_q_function(
+            batch_tensors[SampleBatch.CUR_OBS],
+            policy.actions,
+            policy.observation_space,
+            policy.action_space,
+            policy.config,
+        )
+
     # DPG loss
-    actor_loss = -tf.reduce_mean(policy.q_values(policy.actions))
+    actor_loss = -tf.reduce_mean(q_policy_values)
 
     return actor_loss + critic_loss
 
@@ -60,47 +67,41 @@ def check_action_space(policy, obs_space, action_space, config):
         )
 
 
-def build_continuous_q_function(input_dict, obs_space, action_space, config):
-    """Construct the state preprocessor and critic layers."""
+def build_continuous_q_function(obs, actions, obs_space, action_space, config):
+    """Construct Q function tf graph."""
     if config["use_state_preprocessor"]:
-        state_preprocessor = ModelCatalog.get_model(
-            input_dict, obs_space, action_space, 1, config["model"]
+        q_model = ModelCatalog.get_model(
+            {"obs": obs}, obs_space, action_space, 1, config["model"]
         )
-        processed_obs = state_preprocessor.last_layer
+        q_out = tf.concat([q_model.last_layer, actions], axis=1)
     else:
-        state_preprocessor = None
-        processed_obs = input_dict[SampleBatch.CUR_OBS]
+        q_model = None
+        q_out = tf.concat([obs, actions], axis=1)
 
-    activation = config["critic_hidden_activation"]
-    hiddens = [
-        keras.layers.Dense(units=hidden, activation=activation)
-        for hidden in config["critic_hiddens"]
-    ]
-    layers = hiddens + [keras.layers.Dense(units=1, activation=None)]
-    model = keras.Sequential(layers=layers)
+    activation = getattr(tf.nn, config["critic_hidden_activation"])
+    for hidden in config["critic_hiddens"]:
+        q_out = tf.layers.dense(q_out, units=hidden, activation=activation)
+    q_values = tf.layers.dense(q_out, units=1, activation=None)
 
-    def evaluate_actions(actions):
-        return model(tf.concat([processed_obs, actions], axis=1))
-
-    return evaluate_actions, state_preprocessor
+    return q_values, q_model
 
 
-def build_deterministic_policy(input_dict, obs_space, action_space, config):
+def build_deterministic_policy(obs, obs_space, action_space, config):
     """Contruct deterministic policy tf graph."""
     if config["use_state_preprocessor"]:
-        state_preprocessor = ModelCatalog.get_model(
-            input_dict, obs_space, action_space, 1, config["model"]
+        model = ModelCatalog.get_model(
+            {"obs": obs}, obs_space, action_space, 1, config["model"]
         )
-        action_out = state_preprocessor.last_layer
+        action_out = model.last_layer
     else:
-        state_preprocessor = None
-        action_out = input_dict[SampleBatch.CUR_OBS]
+        model = None
+        action_out = obs
 
-    activation = config["actor_hidden_activation"]
+    activation = getattr(tf.nn, config["actor_hidden_activation"])
     for hidden in config["actor_hiddens"]:
-        action_out = keras.layers.Dense(units=hidden, activation=activation)(action_out)
-    action_out = keras.layers.Dense(units=action_space.shape[0], activation=None)(
-        action_out
+        action_out = tf.layers.dense(action_out, units=hidden, activation=activation)
+    action_out = tf.layers.dense(
+        action_out, units=action_space.shape[0], activation=None
     )
 
     # Use sigmoid to scale to [0,1], but also double magnitude of input to
@@ -113,14 +114,14 @@ def build_deterministic_policy(input_dict, obs_space, action_space, config):
     low_action = action_space.low[None]
     actions = action_range * sigmoid_out + low_action
 
-    return actions, state_preprocessor
+    return actions, model
 
 
 def build_actor_action_ops(policy, input_dict, obs_space, action_space, config):
     """Construct action sampling tf ops."""
-    with tf.compat.v1.variable_scope(POLICY_SCOPE):
-        policy.actions, policy.policy_preprocessor = build_deterministic_policy(
-            input_dict, obs_space, action_space, config
+    with tf.variable_scope(POLICY_SCOPE):
+        policy.actions, policy.policy_model = build_deterministic_policy(
+            input_dict[SampleBatch.CUR_OBS], obs_space, action_space, config
         )
     return policy.actions, None
 
