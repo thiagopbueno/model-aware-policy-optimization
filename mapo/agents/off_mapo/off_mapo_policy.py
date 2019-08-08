@@ -237,24 +237,23 @@ def build_actor_critic_models(policy, input_dict, obs_space, action_space, confi
             "space, or the multi-agent API."
         )
 
-    def make_actor():
-        return build_deterministic_policy(
-            obs_space, action_space, config["actor_model"]
-        )
-
-    def make_critic():
-        return build_continuous_q_function(
-            obs_space, action_space, config["critic_model"]
-        )
-
-    policy.policy_model, policy.target_policy_model = make_actor(), make_actor()
-    policy.q_model, policy.target_q_model = make_critic(), make_critic()
+    policy.q_model = build_continuous_q_function(obs_space, action_space, config)
+    policy.policy_model = build_deterministic_policy(obs_space, action_space, config)
+    policy.target_q_model = build_continuous_q_function(obs_space, action_space, config)
+    policy.target_policy_model = build_deterministic_policy(
+        obs_space, action_space, config
+    )
     policy.main_variables = policy.q_model.variables + policy.policy_model.variables
     policy.target_variables = (
         policy.target_q_model.variables + policy.target_policy_model.variables
     )
     if config["twin_q"]:
-        policy.twin_q_model, policy.target_twin_q_model = make_critic(), make_critic()
+        policy.twin_q_model = build_continuous_q_function(
+            obs_space, action_space, config
+        )
+        policy.target_twin_q_model = build_continuous_q_function(
+            obs_space, action_space, config
+        )
         policy.main_variables += policy.twin_q_model.variables
         policy.target_variables += policy.target_twin_q_model.variables
 
