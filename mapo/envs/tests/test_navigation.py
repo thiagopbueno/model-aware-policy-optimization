@@ -7,8 +7,11 @@ import pytest
 import numpy as np
 import gym
 
-# import mapo
+import mapo
 from mapo.envs.navigation import NavigationEnv, DEFAULT_CONFIG as config
+
+
+mapo.register_all_environments()
 
 
 def get_gym_envs():
