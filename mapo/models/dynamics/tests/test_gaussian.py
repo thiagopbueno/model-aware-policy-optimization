@@ -87,7 +87,7 @@ def output_shape(obs_space):
 
 def test_linear_gaussian_layers(linear_model):
     assert len(linear_model.layers) == 2
-    assert linear_model.hidden_layers
+    assert not linear_model.hidden_layers
     assert isinstance(linear_model.mean_output_layer, Dense)
     assert isinstance(linear_model.log_stddev_output_layer, Dense)
 
