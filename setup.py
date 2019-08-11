@@ -43,6 +43,7 @@ setup(
         "gym",
         "ray[rllib]==0.7.3",
         "tensorflow<2.0.0",
+        "tensorflow_probability",
         "pandas",
         "requests",
     ],
