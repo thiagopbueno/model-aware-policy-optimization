@@ -2,8 +2,8 @@
 from tensorflow import keras
 
 DEFAULT_CONFIG = {
-    "hidden_activation": "relu",
-    "hidden_units": [400, 300],
+    "activation": "relu",
+    "layers": [400, 300],
     "layer_normalization": False,
 }
 
@@ -12,11 +12,11 @@ def build_fcnet(input_shape, config=None):
     """Construct a fully connected Keras model on inputs."""
     config = config or {}
     config = {**DEFAULT_CONFIG, **config}
-    activation = config["hidden_activation"]
+    activation = config["activation"]
     layer_norm = config["layer_normalization"]
 
     inputs = output = keras.Input(shape=input_shape)
-    for units in config["hidden_units"]:
+    for units in config["layers"]:
         if layer_norm:
             output = keras.layers.Dense(units=units)(output)
             output = keras.layers.LayerNormalization(output)
