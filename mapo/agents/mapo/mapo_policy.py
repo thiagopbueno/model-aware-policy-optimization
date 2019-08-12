@@ -18,6 +18,7 @@ def build_actor_critic_losses(policy, batch_tensors):
         batch_tensors[SampleBatch.ACTIONS],
         batch_tensors[Postprocessing.ADVANTAGES],
     )
+    policy.dynamics_loss = tf.constant(0.0)  # Placeholder for future losses
     policy.critic_loss = keras.losses.mean_squared_error(
         policy.model.get_q_values(obs, actions), returns
     )
@@ -25,7 +26,7 @@ def build_actor_critic_losses(policy, batch_tensors):
     policy_action = policy.model.get_actions(obs)
     policy_action_value = policy.model.get_q_values(obs, policy_action)
     policy.actor_loss = -tf.reduce_mean(policy_action_value)
-    return policy.actor_loss + policy.critic_loss
+    return policy.actor_loss + policy.critic_loss + policy.dynamics_loss
 
 
 def get_default_config():
@@ -46,24 +47,36 @@ def create_separate_optimizers(policy, config):
     # pylint: disable=protected-access
     policy._actor_optimizer = keras.optimizers.Adam(learning_rate=config["actor_lr"])
     policy._critic_optimizer = keras.optimizers.Adam(learning_rate=config["critic_lr"])
+    policy._dynamics_optimizer = keras.optimizers.Adam(
+        learning_rate=config["dynamics_lr"]
+    )
     policy.global_step = tf.Variable(0, trainable=False)
 
 
-def actor_critic_gradients(policy, *_):
+def compute_separate_gradients(policy, *_):
     """Create compute gradients ops using separate optimizers."""
     # pylint: disable=protected-access
     actor_variables = policy.model.actor_variables
     critic_variables = policy.model.critic_variables
+    dynamics_variables = policy.model.dynamics_variables
     actor_grads = policy._actor_optimizer.get_gradients(
         policy.actor_loss, actor_variables
     )
     critic_grads = policy._critic_optimizer.get_gradients(
         policy.critic_loss, critic_variables
     )
+    dynamics_grads = policy._dynamics_optimizer.get_gradients(
+        policy.dynamics_loss, dynamics_variables
+    )
     # Save these for later use in build_apply_op
     policy._actor_grads_and_vars = list(zip(actor_grads, actor_variables))
     policy._critic_grads_and_vars = list(zip(critic_grads, critic_variables))
-    return policy._actor_grads_and_vars + policy._critic_grads_and_vars
+    policy._dynamics_grads_and_vars = list(zip(dynamics_grads, dynamics_variables))
+    return (
+        policy._actor_grads_and_vars
+        + policy._critic_grads_and_vars
+        + policy._dynamics_grads_and_vars
+    )
 
 
 def apply_gradients_with_delays(policy, *_):
@@ -94,8 +107,8 @@ def apply_gradients_with_delays(policy, *_):
         return tf.group(actor_op, critic_op)
 
 
-def build_actor_critic_network(policy, obs_space, action_space, config):
-    """Construct actor and critic keras models, wrapped in the ModelV2 interface."""
+def build_mapo_network(policy, obs_space, action_space, config):
+    """Construct MAPOModelV2 networks."""
     # pylint: disable=unused-argument
     if not isinstance(action_space, Box):
         raise UnsupportedSpaceException(
@@ -129,8 +142,8 @@ MAPOTFPolicy = build_tf_policy(
     get_default_config=get_default_config,
     postprocess_fn=compute_return,
     optimizer_fn=create_separate_optimizers,
-    gradients_fn=actor_critic_gradients,
+    gradients_fn=compute_separate_gradients,
     apply_gradients_fn=apply_gradients_with_delays,
-    make_model=build_actor_critic_network,
+    make_model=build_mapo_network,
     action_sampler_fn=main_actor_output,
 )

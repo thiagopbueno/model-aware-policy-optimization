@@ -11,7 +11,7 @@ def build_continuous_q_function(obs_space, action_space, config=None):
     """
     obs_input = keras.Input(shape=obs_space.shape)
     action_input = keras.Input(shape=action_space.shape)
-    output = keras.layers.Concatenate(axis=1)([obs_input, action_input])
+    output = keras.layers.Concatenate(axis=-1)([obs_input, action_input])
 
     output = build_fcnet(output.shape, config=config)(output)
     output = keras.layers.Dense(units=1, activation=None)(output)

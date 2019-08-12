@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 DEFAULT_CONFIG = merge_dicts(
     BASE_CONFIG,
     {
+        # === MAPO ===
+        # How many samples to draw from the dynamics model
+        "branching_factor": 1,
         # === Model ===
         # twin Q-net
         "twin_q": True,
@@ -48,6 +51,8 @@ DEFAULT_CONFIG = merge_dicts(
         "target_noise_clip": 0.5,
         # delayed policy update
         "policy_delay": 2,
+        # delayed critic update
+        "critic_delay": 1,
         # How many environment steps to take before learning starts.
         "learning_starts": 0,
         # === Replay buffer ===

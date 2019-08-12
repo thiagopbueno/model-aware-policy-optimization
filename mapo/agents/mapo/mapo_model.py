@@ -136,14 +136,18 @@ class MAPOModel(TFModelV2):  # pylint: disable=abstract-method
         """
         return self._get_model("twin_q_net", target)([obs, action])
 
+    def get_state_values(self, obs):
+        """Compute state values by composing policy and Q networks."""
+        return self.get_q_values(obs, self.get_actions(obs))
+
     def next_state_dist(self, obs, action):
         """Compute the the dynamics model's conditional distribution of
         the next state."""
         return self.models["dynamics"].dist(obs, action)
 
-    def sample_next_state(self, obs, action):
+    def sample_next_state(self, obs, action, shape=()):
         """Sample the next state from the dynamics model."""
-        return self.models["dynamics"].sample(obs, action)
+        return self.models["dynamics"].sample(obs, action, shape=shape)
 
     def next_state_log_prob(self, obs, action, next_obs):
         """Compute the log-likelihood of a transition using the dynamics model."""
