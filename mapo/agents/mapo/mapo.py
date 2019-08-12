@@ -21,6 +21,7 @@ DEFAULT_CONFIG = with_common_config(
                 "custom_options": {
                     "actor": {"activation": "relu", "layers": [400, 300]},
                     "critic": {"activation": "relu", "layers": [400, 300]},
+                    "dynamics": {"activation": "relu", "layers": [400, 300]},
                 },
             },
         ),
