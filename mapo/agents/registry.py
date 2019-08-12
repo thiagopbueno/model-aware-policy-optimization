@@ -13,4 +13,10 @@ def _import_off_mapo():
     return mapo.OffMAPOTrainer
 
 
-ALGORITHMS = {"MAPO": _import_mapo, "OffMAPO": _import_off_mapo}
+def _import_td3():
+    from mapo.agents import td3
+
+    return td3.TD3Trainer
+
+
+ALGORITHMS = {"MAPO": _import_mapo, "OffMAPO": _import_off_mapo, "OurTD3": _import_td3}
