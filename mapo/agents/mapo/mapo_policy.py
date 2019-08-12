@@ -96,6 +96,7 @@ def apply_gradients_with_delays(policy, *_):
 
 def build_actor_critic_network(policy, obs_space, action_space, config):
     """Construct actor and critic keras models, wrapped in the ModelV2 interface."""
+    # pylint: disable=unused-argument
     if not isinstance(action_space, Box):
         raise UnsupportedSpaceException(
             "Action space {} is not supported for MAPO.".format(action_space)
@@ -106,7 +107,7 @@ def build_actor_critic_network(policy, obs_space, action_space, config):
             + "Consider reshaping this into a single dimension, using a Tuple action"
             "space, or the multi-agent API."
         )
-    policy.model = ModelCatalog.get_model_v2(
+    return ModelCatalog.get_model_v2(
         obs_space,
         action_space,
         1,
@@ -114,8 +115,6 @@ def build_actor_critic_network(policy, obs_space, action_space, config):
         framework="tf",
         name="mapo_model",
     )
-
-    return policy.model
 
 
 def main_actor_output(policy, model, input_dict, obs_space, action_space, config):
