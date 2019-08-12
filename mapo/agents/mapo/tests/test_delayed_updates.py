@@ -12,9 +12,8 @@ def test_target_network_initialization():
     policy = worker.get_policy()
 
     def get_main_target_vars():
-        main_vars = policy.get_session().run(policy.model.variables())
-        target_vars = policy.get_session().run(policy.target_model.variables())
-        return zip(main_vars, target_vars)
+        sess = policy.get_session()
+        return sess.run(policy.model.main_and_target_variables)
 
     assert all([np.allclose(main, target) for main, target in get_main_target_vars()])
     policy.learn_on_batch(worker.sample())
@@ -60,7 +59,10 @@ def test_target_update_frequency():
     policy = worker.get_policy()
 
     def get_target_vars():
-        return policy.get_session().run(policy.target_model.variables())
+        sess = policy.get_session()
+        return [
+            target for main, target in sess.run(policy.model.main_and_target_variables)
+        ]
 
     for iteration in range(1, 7):
         before = get_target_vars()

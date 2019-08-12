@@ -17,8 +17,8 @@ def _build_critic_targets(policy, batch_tensors):
         batch_tensors[SampleBatch.NEXT_OBS],
     )
     gamma = policy.config["gamma"]
-    target_model = policy.target_model
-    next_action = policy.target_model.get_actions(next_obs)
+    model = policy.model
+    next_action = model.get_actions(next_obs, target=True)
     if policy.config["smooth_target_policy"]:
         epsilon = tf.random.normal(
             tf.shape(next_action), stddev=policy.config["target_noise"]
@@ -32,9 +32,9 @@ def _build_critic_targets(policy, batch_tensors):
         next_action = tf.clip_by_value(
             next_action, policy.action_space.low, policy.action_space.high
         )
-    next_q_values = tf.squeeze(target_model.get_q_values(next_obs, next_action))
+    next_q_values = tf.squeeze(model.get_q_values(next_obs, next_action, target=True))
     if policy.config["twin_q"]:
-        twin_q_values = target_model.get_twin_q_values(next_obs, next_action)
+        twin_q_values = model.get_twin_q_values(next_obs, next_action, target=True)
         next_q_values = tf.math.minimum(next_q_values, tf.squeeze(twin_q_values))
     # Do not bootstrap if the state is terminal
     bootstrapped = rewards + gamma * next_q_values
@@ -247,6 +247,7 @@ def build_action_sampler(policy, model, input_dict, obs_space, action_space, con
 
 def build_actor_critic_network(policy, obs_space, action_space, config):
     """Construct actor and critic keras models, wrapped in the ModelV2 interface."""
+    # pylint: disable=unused-argument
     if not isinstance(action_space, Box):
         raise UnsupportedSpaceException(
             "Action space {} is not supported for MAPO.".format(action_space)
@@ -257,27 +258,16 @@ def build_actor_critic_network(policy, obs_space, action_space, config):
             + "Consider reshaping this into a single dimension, using a Tuple action"
             "space, or the multi-agent API."
         )
-    policy.model = ModelCatalog.get_model_v2(
+    return ModelCatalog.get_model_v2(
         obs_space,
         action_space,
         1,
         model_config=config["model"],
         framework="tf",
         name="mapo_model",
+        target_networks=True,
         twin_q=config["twin_q"],
     )
-
-    policy.target_model = ModelCatalog.get_model_v2(
-        obs_space,
-        action_space,
-        1,
-        model_config=config["model"],
-        framework="tf",
-        name="mapo_model",
-        twin_q=config["twin_q"],
-    )
-
-    return policy.model
 
 
 class ExplorationStateMixin:  # pylint: disable=too-few-public-methods
@@ -302,11 +292,9 @@ class TargetUpdatesMixin:  # pylint: disable=too-few-public-methods
     def build_update_targets_op(self, tau=None):
         """Build op to update target networks."""
         tau = tau or self.config["tau"]
-        main_variables = self.model.variables()
-        target_variables = self.target_model.variables()
         update_target_expr = [
-            target_var.assign(tau * var + (1.0 - tau) * target_var)
-            for var, target_var in zip(main_variables, target_variables)
+            target.assign(tau * main + (1.0 - tau) * target)
+            for main, target in self.model.main_and_target_variables
         ]
         return tf.group(*update_target_expr)
 
