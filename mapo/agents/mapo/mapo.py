@@ -19,8 +19,8 @@ DEFAULT_CONFIG = with_common_config(
             {
                 "custom_model": "mapo_model",
                 "custom_options": {
-                    "actor": {"hidden_activation": "relu", "hidden_units": [400, 300]},
-                    "critic": {"hidden_activation": "relu", "hidden_units": [400, 300]},
+                    "actor": {"activation": "relu", "layers": [400, 300]},
+                    "critic": {"activation": "relu", "layers": [400, 300]},
                 },
             },
         ),
