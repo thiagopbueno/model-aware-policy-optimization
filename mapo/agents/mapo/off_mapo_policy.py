@@ -10,6 +10,15 @@ from ray.rllib.utils.error import UnsupportedSpaceException
 from mapo.agents.mapo.mapo_policy import MAPOTFPolicy
 
 
+def _build_dynamics_loss(policy, batch_tensors):
+    obs, actions, next_obs = (
+        batch_tensors[SampleBatch.CUR_OBS],
+        batch_tensors[SampleBatch.ACTIONS],
+        batch_tensors[SampleBatch.NEXT_OBS],
+    )
+    return -tf.reduce_mean(policy.model.next_state_log_prob(obs, actions, next_obs))
+
+
 def _build_critic_targets(policy, batch_tensors):
     rewards, dones, next_obs = (
         batch_tensors[SampleBatch.REWARDS],
@@ -71,20 +80,34 @@ def _build_critic_loss(policy, batch_tensors):
 
 def _build_actor_loss(policy, batch_tensors):
     obs = batch_tensors[SampleBatch.CUR_OBS]
-    policy_action = policy.model.get_actions(obs)
-    policy_action_value = policy.model.get_q_values(obs, policy_action)
-    policy.loss_stats["qpi_mean"] = tf.reduce_mean(policy_action_value)
-    return -tf.reduce_mean(policy_action_value)
+    gamma = policy.config["gamma"]
+    model = policy.model
+    n_samples = policy.config["branching_factor"]
+
+    policy_action = model.get_actions(obs)
+    next_state_dist = model.next_state_dist(obs, policy_action)
+    sampled_next_state = next_state_dist.sample((n_samples,))
+    next_state_log_prob = tf.reduce_sum(
+        next_state_dist.log_prob(sampled_next_state), axis=-1
+    )
+    next_state_value = tf.stop_gradient(model.get_state_values(sampled_next_state))
+    # later: add reward function gradient before gamma
+    model_aware_policy_loss = tf.reduce_mean(
+        gamma * tf.reduce_mean(next_state_log_prob * next_state_value, axis=0)
+    )
+    return model_aware_policy_loss
 
 
-def build_actor_critic_losses(policy, batch_tensors):
-    """Contruct actor (DPG) and critic (Fitted Q) losses."""
+def build_mapo_losses(policy, batch_tensors):
+    """Contruct actor (MADPG), critic (Fitted Q) and dynamics (MLE) losses."""
     policy.loss_stats = {}
+    policy.dynamics_loss = _build_dynamics_loss(policy, batch_tensors)
     policy.critic_loss = _build_critic_loss(policy, batch_tensors)
     policy.actor_loss = _build_actor_loss(policy, batch_tensors)
+    policy.loss_stats["dynamics_loss"] = policy.dynamics_loss
     policy.loss_stats["critic_loss"] = policy.critic_loss
     policy.loss_stats["actor_loss"] = policy.actor_loss
-    return policy.actor_loss + policy.critic_loss
+    return policy.actor_loss + policy.critic_loss + policy.dynamics_loss
 
 
 def get_default_config():
@@ -118,17 +141,31 @@ def extra_loss_fetches(policy, _):
 
 def apply_gradients_with_delays(policy, *_):
     """
-    Update actor and critic models with different frequencies.
+    Update actor, critic and dynamics models with different frequencies.
 
-    For policy gradient, update policy net one time v.s. update critic net
-    `policy_delay` time(s). Also use `policy_delay` for target networks update.
+    Dynamics model is always updated. Actor and critic models can have different
+    update frequencies. Updates target networks along with actor.
     """
     # pylint: disable=protected-access
     with tf.control_dependencies([policy.global_step.assign_add(1)]):
-        # Critic updates
-        critic_op = policy._critic_optimizer.apply_gradients(
-            policy._critic_grads_and_vars
+        # Dynamics updates
+        dynamics_op = policy._dynamics_optimizer.apply_gradients(
+            policy._dynamics_grads_and_vars
         )
+        # Critic updates
+        should_apply_critic_opt = tf.equal(
+            tf.math.mod(policy.global_step, policy.config["critic_delay"]), 0
+        )
+
+        def make_critic_apply_op():
+            return policy._critic_optimizer.apply_gradients(
+                policy._critic_grads_and_vars
+            )
+
+        with tf.control_dependencies([dynamics_op]):
+            critic_op = tf.cond(
+                should_apply_critic_opt, true_fn=make_critic_apply_op, false_fn=tf.no_op
+            )
         # Actor updates
         should_apply_actor_opt = tf.equal(
             tf.math.mod(policy.global_step, policy.config["policy_delay"]), 0
@@ -141,7 +178,7 @@ def apply_gradients_with_delays(policy, *_):
             actor_op = tf.cond(
                 should_apply_actor_opt, true_fn=make_actor_apply_op, false_fn=tf.no_op
             )
-        apply_ops = tf.group(actor_op, critic_op)
+        apply_ops = tf.group(dynamics_op, critic_op, actor_op)
         with tf.control_dependencies([apply_ops]):
             update_targets_op = tf.cond(
                 should_apply_actor_opt,
@@ -245,8 +282,8 @@ def build_action_sampler(policy, model, input_dict, obs_space, action_space, con
     return actions, None
 
 
-def build_actor_critic_network(policy, obs_space, action_space, config):
-    """Construct actor and critic keras models, wrapped in the ModelV2 interface."""
+def build_mapo_network(policy, obs_space, action_space, config):
+    """Construct MAPOModelV2 networks with target actor and critic."""
     # pylint: disable=unused-argument
     if not isinstance(action_space, Box):
         raise UnsupportedSpaceException(
@@ -301,7 +338,7 @@ class TargetUpdatesMixin:  # pylint: disable=too-few-public-methods
 
 OffMAPOTFPolicy = MAPOTFPolicy.with_updates(  # pylint: disable=invalid-name
     name="OffMAPOTFPolicy",
-    loss_fn=build_actor_critic_losses,
+    loss_fn=build_mapo_losses,
     get_default_config=get_default_config,
     postprocess_fn=ignore_timeout_termination,
     stats_fn=extra_loss_fetches,
@@ -309,7 +346,7 @@ OffMAPOTFPolicy = MAPOTFPolicy.with_updates(  # pylint: disable=invalid-name
     extra_action_feed_fn=extra_action_feed_fn,
     before_init=setup_early_mixins,
     after_init=copy_targets,
-    make_model=build_actor_critic_network,
+    make_model=build_mapo_network,
     action_sampler_fn=build_action_sampler,
     mixins=[TargetUpdatesMixin, ExplorationStateMixin],
     obs_include_prev_action_reward=False,
