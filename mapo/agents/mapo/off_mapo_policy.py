@@ -31,7 +31,7 @@ def _build_critic_targets(policy, batch_tensors):
     )
     gamma = policy.config["gamma"]
     model = policy.model
-    next_action = model.get_actions(next_obs, target=True)
+    next_action = model.compute_actions(next_obs, target=True)
     if policy.config["smooth_target_policy"]:
         epsilon = tf.random.normal(
             tf.shape(next_action), stddev=policy.config["target_noise"]
@@ -45,9 +45,11 @@ def _build_critic_targets(policy, batch_tensors):
         next_action = tf.clip_by_value(
             next_action, policy.action_space.low, policy.action_space.high
         )
-    next_q_values = tf.squeeze(model.get_q_values(next_obs, next_action, target=True))
+    next_q_values = tf.squeeze(
+        model.compute_q_values(next_obs, next_action, target=True)
+    )
     if policy.config["twin_q"]:
-        twin_q_values = model.get_twin_q_values(next_obs, next_action, target=True)
+        twin_q_values = model.compute_twin_q_values(next_obs, next_action, target=True)
         next_q_values = tf.math.minimum(next_q_values, tf.squeeze(twin_q_values))
     # Do not bootstrap if the state is terminal
     bootstrapped = rewards + gamma * next_q_values
@@ -61,7 +63,7 @@ def _build_critic_loss(policy, batch_tensors):
     )
     target_q_values = _build_critic_targets(policy, batch_tensors)
     q_loss_criterion = keras.losses.MeanSquaredError()
-    q_pred = tf.squeeze(policy.model.get_q_values(obs, actions))
+    q_pred = tf.squeeze(policy.model.compute_q_values(obs, actions))
     q_stats = {
         "q_mean": tf.reduce_mean(q_pred),
         "q_max": tf.reduce_max(q_pred),
@@ -70,7 +72,7 @@ def _build_critic_loss(policy, batch_tensors):
     policy.loss_stats.update(q_stats)
     critic_loss = q_loss_criterion(q_pred, target_q_values)
     if policy.config["twin_q"]:
-        twin_q_pred = tf.squeeze(policy.model.get_twin_q_values(obs, actions))
+        twin_q_pred = tf.squeeze(policy.model.compute_twin_q_values(obs, actions))
         twin_q_stats = {
             "twin_q_mean": tf.reduce_mean(twin_q_pred),
             "twin_q_max": tf.reduce_max(twin_q_pred),
@@ -88,13 +90,13 @@ def _build_actor_loss(policy, batch_tensors):
     model = policy.model
     n_samples = policy.config["branching_factor"]
 
-    policy_action = model.get_actions(obs)
+    policy_action = model.compute_actions(obs)
     next_state_dist = model.next_state_dist(obs, policy_action)
     sampled_next_state = next_state_dist.sample((n_samples,))
     next_state_log_prob = tf.reduce_sum(
         next_state_dist.log_prob(sampled_next_state), axis=-1
     )
-    next_state_value = tf.stop_gradient(model.get_state_values(sampled_next_state))
+    next_state_value = tf.stop_gradient(model.compute_state_values(sampled_next_state))
     # later: add reward function gradient before gamma
     model_aware_policy_loss = tf.reduce_mean(
         gamma * tf.reduce_mean(next_state_log_prob * next_state_value, axis=0)
@@ -216,7 +218,7 @@ def copy_targets(policy, obs_space, action_space, config):
 def build_action_sampler(policy, model, input_dict, obs_space, action_space, config):
     """Add exploration noise when not evaluating the policy."""
     # pylint: disable=too-many-arguments,unused-argument
-    deterministic_actions = model.get_actions(input_dict[SampleBatch.CUR_OBS])
+    deterministic_actions = model.compute_actions(input_dict[SampleBatch.CUR_OBS])
     policy.evaluating = tf.placeholder(tf.bool, shape=[])
     policy.pure_exploration_phase = tf.placeholder(tf.bool, shape=[])
 
