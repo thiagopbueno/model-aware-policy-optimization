@@ -3,11 +3,15 @@ import tensorflow as tf
 from tensorflow import keras
 from gym.spaces import Box
 
+from ray.rllib.policy import build_tf_policy
 from ray.rllib.policy.sample_batch import SampleBatch
 from ray.rllib.models.catalog import ModelCatalog
 from ray.rllib.utils.error import UnsupportedSpaceException
 
-from mapo.agents.mapo.mapo_policy import MAPOTFPolicy
+from mapo.agents.mapo.mapo_policy import (
+    create_separate_optimizers,
+    compute_separate_gradients,
+)
 
 
 def _build_dynamics_loss(policy, batch_tensors):
@@ -336,12 +340,14 @@ class TargetUpdatesMixin:  # pylint: disable=too-few-public-methods
         return tf.group(*update_target_expr)
 
 
-OffMAPOTFPolicy = MAPOTFPolicy.with_updates(  # pylint: disable=invalid-name
+OffMAPOTFPolicy = build_tf_policy(
     name="OffMAPOTFPolicy",
     loss_fn=build_mapo_losses,
     get_default_config=get_default_config,
     postprocess_fn=ignore_timeout_termination,
     stats_fn=extra_loss_fetches,
+    optimizer_fn=create_separate_optimizers,
+    gradients_fn=compute_separate_gradients,
     apply_gradients_fn=apply_gradients_with_delays,
     extra_action_feed_fn=extra_action_feed_fn,
     before_init=setup_early_mixins,
