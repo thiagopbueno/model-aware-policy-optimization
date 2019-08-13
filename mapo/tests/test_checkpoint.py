@@ -9,6 +9,7 @@ from mapo.tests.mock_env import MockEnv
 from mapo.agents.registry import ALGORITHMS
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("get_trainer", list(ALGORITHMS.values()))
 def test_checkpoint_restore(tmpdir, get_trainer):
     """
