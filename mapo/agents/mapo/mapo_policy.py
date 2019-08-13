@@ -20,11 +20,11 @@ def build_actor_critic_losses(policy, batch_tensors):
     )
     policy.dynamics_loss = tf.constant(0.0)  # Placeholder for future losses
     policy.critic_loss = keras.losses.mean_squared_error(
-        policy.model.get_q_values(obs, actions), returns
+        policy.model.compute_q_values(obs, actions), returns
     )
     # DPG loss
-    policy_action = policy.model.get_actions(obs)
-    policy_action_value = policy.model.get_q_values(obs, policy_action)
+    policy_action = policy.model.compute_actions(obs)
+    policy_action_value = policy.model.compute_q_values(obs, policy_action)
     policy.actor_loss = -tf.reduce_mean(policy_action_value)
     return policy.actor_loss + policy.critic_loss + policy.dynamics_loss
 
@@ -133,7 +133,7 @@ def build_mapo_network(policy, obs_space, action_space, config):
 def main_actor_output(policy, model, input_dict, obs_space, action_space, config):
     """Simply use the deterministic actor output as the action."""
     # pylint: disable=too-many-arguments,unused-argument
-    return model.get_actions(input_dict[SampleBatch.CUR_OBS]), None
+    return model.compute_actions(input_dict[SampleBatch.CUR_OBS]), None
 
 
 MAPOTFPolicy = build_tf_policy(

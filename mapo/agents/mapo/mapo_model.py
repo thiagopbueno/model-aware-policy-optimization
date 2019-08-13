@@ -112,7 +112,7 @@ class MAPOModel(TFModelV2):  # pylint: disable=abstract-method
             )
         ]
 
-    def get_actions(self, obs, target=False):
+    def compute_actions(self, obs, target=False):
         """Compute actions using policy network.
 
         Keyword arguments:
@@ -120,7 +120,7 @@ class MAPOModel(TFModelV2):  # pylint: disable=abstract-method
         """
         return self._get_model("policy", target)(obs)
 
-    def get_q_values(self, obs, action, target=False):
+    def compute_q_values(self, obs, action, target=False):
         """Compute action values using main Q network.
 
         Keyword arguments:
@@ -128,7 +128,7 @@ class MAPOModel(TFModelV2):  # pylint: disable=abstract-method
         """
         return self._get_model("q_net", target)([obs, action])
 
-    def get_twin_q_values(self, obs, action, target=False):
+    def compute_twin_q_values(self, obs, action, target=False):
         """Compute action values using twin Q network.
 
         Keyword arguments:
@@ -136,9 +136,9 @@ class MAPOModel(TFModelV2):  # pylint: disable=abstract-method
         """
         return self._get_model("twin_q_net", target)([obs, action])
 
-    def get_state_values(self, obs):
+    def compute_state_values(self, obs):
         """Compute state values by composing policy and Q networks."""
-        return self.get_q_values(obs, self.get_actions(obs))
+        return self.compute_q_values(obs, self.compute_actions(obs))
 
     def next_state_dist(self, obs, action):
         """Compute the the dynamics model's conditional distribution of
