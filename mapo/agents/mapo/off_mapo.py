@@ -14,9 +14,6 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 DEFAULT_CONFIG = merge_dicts(
     BASE_CONFIG,
     {
-        # === MAPO ===
-        # How many samples to draw from the dynamics model
-        "branching_factor": 1,
         # === Model ===
         # twin Q-net
         "twin_q": True,

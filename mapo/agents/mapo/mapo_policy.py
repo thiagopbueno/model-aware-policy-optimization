@@ -10,23 +10,61 @@ from ray.rllib.models.catalog import ModelCatalog
 from ray.rllib.evaluation.postprocessing import compute_advantages, Postprocessing
 
 
-def build_actor_critic_losses(policy, batch_tensors):
-    """Contruct actor (DPG) and critic (Fitted Q) tf losses."""
+def _build_dynamics_mle_loss(batch_tensors, model):
+    obs, actions, next_obs = (
+        batch_tensors[SampleBatch.CUR_OBS],
+        batch_tensors[SampleBatch.ACTIONS],
+        batch_tensors[SampleBatch.NEXT_OBS],
+    )
+    return -tf.reduce_mean(model.compute_states_log_prob(obs, actions, next_obs))
+
+
+def _build_critic_loss(batch_tensors, model):
     # Fitted Q loss (using trajectory returns)
     obs, actions, returns = (
         batch_tensors[SampleBatch.CUR_OBS],
         batch_tensors[SampleBatch.ACTIONS],
         batch_tensors[Postprocessing.ADVANTAGES],
     )
-    policy.dynamics_loss = tf.constant(0.0)  # Placeholder for future losses
-    policy.critic_loss = keras.losses.mean_squared_error(
-        policy.model.compute_q_values(obs, actions), returns
+    return keras.losses.mean_squared_error(
+        model.compute_q_values(obs, actions), returns
     )
-    # DPG loss
-    policy_action = policy.model.compute_actions(obs)
-    policy_action_value = policy.model.compute_q_values(obs, policy_action)
-    policy.actor_loss = -tf.reduce_mean(policy_action_value)
-    return policy.actor_loss + policy.critic_loss + policy.dynamics_loss
+
+
+def _build_actor_loss(batch_tensors, model, config):
+    obs = batch_tensors[SampleBatch.CUR_OBS]
+    gamma = config["gamma"]
+    n_samples = config["branching_factor"]
+    policy_action = model.compute_actions(obs)
+    sampled_next_state, next_state_log_prob = model.compute_log_prob_sampled(
+        obs, policy_action, (n_samples,)
+    )
+    next_state_value = tf.stop_gradient(model.compute_state_values(sampled_next_state))
+    model_aware_policy_loss = tf.reduce_mean(
+        gamma * tf.reduce_mean(next_state_log_prob * next_state_value, axis=0)
+    )
+    return model_aware_policy_loss
+
+
+def build_mapo_losses(policy, batch_tensors):
+    """Contruct dynamics (MLE/PG-aware), critic (Fitted Q) and actor (MADPG) losses."""
+    policy.loss_stats = {}
+    if policy.config["model_loss"] == "mle":
+        policy.dynamics_loss = _build_dynamics_mle_loss(batch_tensors, policy.model)
+    elif policy.config["model_loss"] == "pg-aware":
+        raise NotImplementedError
+    else:
+        raise ValueError(
+            "Unknown model_loss '{}' (try 'mle' or 'pg-aware')".format(
+                policy.config["model_loss"]
+            )
+        )
+    policy.critic_loss = _build_critic_loss(batch_tensors, policy.model)
+    policy.actor_loss = _build_actor_loss(batch_tensors, policy.model, policy.config)
+    policy.loss_stats["dynamics_loss"] = policy.dynamics_loss
+    policy.loss_stats["critic_loss"] = policy.critic_loss
+    policy.loss_stats["actor_loss"] = policy.actor_loss
+    return policy.dynamics_loss + policy.critic_loss + policy.actor_loss
 
 
 def get_default_config():
@@ -138,7 +176,7 @@ def main_actor_output(policy, model, input_dict, obs_space, action_space, config
 
 MAPOTFPolicy = build_tf_policy(
     name="MAPOTFPolicy",
-    loss_fn=build_actor_critic_losses,
+    loss_fn=build_mapo_losses,
     get_default_config=get_default_config,
     postprocess_fn=compute_return,
     optimizer_fn=create_separate_optimizers,

@@ -9,18 +9,10 @@ from ray.rllib.models.catalog import ModelCatalog
 from ray.rllib.utils.error import UnsupportedSpaceException
 
 from mapo.agents.mapo.mapo_policy import (
+    _build_dynamics_mle_loss,
     create_separate_optimizers,
     compute_separate_gradients,
 )
-
-
-def _build_dynamics_mle_loss(policy, batch_tensors):
-    obs, actions, next_obs = (
-        batch_tensors[SampleBatch.CUR_OBS],
-        batch_tensors[SampleBatch.ACTIONS],
-        batch_tensors[SampleBatch.NEXT_OBS],
-    )
-    return -tf.reduce_mean(policy.model.compute_states_log_prob(obs, actions, next_obs))
 
 
 def _build_critic_targets(policy, batch_tensors):
@@ -103,10 +95,10 @@ def _build_actor_loss(policy, batch_tensors):
 
 
 def build_mapo_losses(policy, batch_tensors):
-    """Contruct actor (MADPG), critic (Fitted Q) and dynamics (MLE) losses."""
+    """Contruct dynamics (MLE/PG-aware), critic (Fitted Q) and actor (MADPG) losses."""
     policy.loss_stats = {}
     if policy.config["model_loss"] == "mle":
-        policy.dynamics_loss = _build_dynamics_mle_loss(policy, batch_tensors)
+        policy.dynamics_loss = _build_dynamics_mle_loss(batch_tensors, policy.model)
     elif policy.config["model_loss"] == "pg-aware":
         raise NotImplementedError
     else:

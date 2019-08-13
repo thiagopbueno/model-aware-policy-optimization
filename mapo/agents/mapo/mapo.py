@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 DEFAULT_CONFIG = with_common_config(
     {
+        # === MAPO ===
+        # How many samples to draw from the dynamics model
+        "branching_factor": 1,
         # === Model ===
         # actor and critic network configuration
         "model": merge_dicts(
