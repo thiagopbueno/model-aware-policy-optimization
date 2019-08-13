@@ -78,3 +78,10 @@ class GaussianDynamicsModel(keras.Model):
         log_probs = dist.log_prob(next_state)
         log_prob = tf.reduce_sum(log_probs, axis=-1)
         return log_prob
+
+    def log_prob_sampled(self, state, action, shape=()):
+        dist = self.dist(state, action)
+        next_state = tf.stop_gradient(dist.sample(shape))
+        log_probs = dist.log_prob(next_state)
+        log_prob = tf.reduce_sum(log_probs, axis=-1)
+        return next_state, log_prob
