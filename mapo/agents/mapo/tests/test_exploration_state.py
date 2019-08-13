@@ -1,6 +1,5 @@
 """Tests regarding exploration features in OffMAPO."""
 # pylint: disable=missing-docstring
-import pytest
 import numpy as np
 import scipy.stats as stats
 from ray.rllib.evaluation import RolloutWorker
@@ -23,7 +22,6 @@ def test_deterministic_evaluation():
     assert np.allclose(action1, action2)
 
 
-@pytest.mark.skip
 def test_pure_exploration():
     env = MockEnv({"action_dim": 1})
     ob_space, ac_space = env.observation_space, env.action_space
@@ -40,23 +38,24 @@ def test_pure_exploration():
     def rvs(size=1):
         return np.squeeze(policy.compute_actions(obs.repeat(size, axis=0), [])[0])
 
-    _, p_value = stats.kstest(rvs, cdf, N=2000)
+    _, p_value = stats.kstest(rvs, cdf, N=4000)
     assert p_value >= 0.05
 
 
-@pytest.mark.skip
 def test_iid_gaussian_exploration():
-    env = MockEnv({"action_dim": 1})
+    # Expand bounds so that almost no distribution samples are clipped to range
+    env = MockEnv({"action_dim": 1, "action_low": -100, "action_high": 100})
     policy = OffMAPOTFPolicy(
         env.observation_space,
         env.action_space,
         {"exploration_noise_type": "gaussian", "exploration_gaussian_sigma": 0.5},
     )
 
-    obs = env.observation_space.sample()
+    obs = env.observation_space.sample()[None]
     policy.evaluate(True)
-    loc = np.squeeze(policy.compute_single_action(obs, [])[0])
+    loc = np.squeeze(policy.compute_single_action(obs[0], [])[0])
     policy.evaluate(False)
+    policy.set_pure_exploration_phase(False)
 
     def cdf(var):
         return stats.norm.cdf(
@@ -64,7 +63,7 @@ def test_iid_gaussian_exploration():
         )
 
     def rvs(size=1):
-        return np.squeeze(policy.compute_actions(obs[None].repeat(size, axis=0), [])[0])
+        return np.squeeze(policy.compute_actions(obs.repeat(size, axis=0), [])[0])
 
-    _, p_value = stats.kstest(rvs, cdf, N=2000)
+    _, p_value = stats.kstest(rvs, cdf, N=4000)
     assert p_value >= 0.05
