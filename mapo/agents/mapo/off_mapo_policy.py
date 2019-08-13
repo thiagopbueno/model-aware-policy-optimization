@@ -20,7 +20,7 @@ def _build_dynamics_mle_loss(policy, batch_tensors):
         batch_tensors[SampleBatch.ACTIONS],
         batch_tensors[SampleBatch.NEXT_OBS],
     )
-    return -tf.reduce_mean(policy.model.next_state_log_prob(obs, actions, next_obs))
+    return -tf.reduce_mean(policy.model.compute_states_log_prob(obs, actions, next_obs))
 
 
 def _build_critic_targets(policy, batch_tensors):
@@ -91,10 +91,8 @@ def _build_actor_loss(policy, batch_tensors):
     n_samples = policy.config["branching_factor"]
 
     policy_action = model.compute_actions(obs)
-    next_state_dist = model.next_state_dist(obs, policy_action)
-    sampled_next_state = next_state_dist.sample((n_samples,))
-    next_state_log_prob = tf.reduce_sum(
-        next_state_dist.log_prob(sampled_next_state), axis=-1
+    sampled_next_state, next_state_log_prob = model.compute_log_prob_sampled(
+        obs, policy_action, (n_samples,)
     )
     next_state_value = tf.stop_gradient(model.compute_state_values(sampled_next_state))
     # later: add reward function gradient before gamma
