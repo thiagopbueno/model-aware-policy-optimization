@@ -14,7 +14,7 @@ from mapo.agents.mapo.mapo_policy import (
 )
 
 
-def _build_dynamics_loss(policy, batch_tensors):
+def _build_dynamics_mle_loss(policy, batch_tensors):
     obs, actions, next_obs = (
         batch_tensors[SampleBatch.CUR_OBS],
         batch_tensors[SampleBatch.ACTIONS],
@@ -107,7 +107,16 @@ def _build_actor_loss(policy, batch_tensors):
 def build_mapo_losses(policy, batch_tensors):
     """Contruct actor (MADPG), critic (Fitted Q) and dynamics (MLE) losses."""
     policy.loss_stats = {}
-    policy.dynamics_loss = _build_dynamics_loss(policy, batch_tensors)
+    if policy.config["model_loss"] == "mle":
+        policy.dynamics_loss = _build_dynamics_mle_loss(policy, batch_tensors)
+    elif policy.config["model_loss"] == "pg-aware":
+        raise NotImplementedError
+    else:
+        raise ValueError(
+            "Unknown model_loss '{}' (try 'mle' or 'pg-aware')".format(
+                policy.config["model_loss"]
+            )
+        )
     policy.critic_loss = _build_critic_loss(policy, batch_tensors)
     policy.actor_loss = _build_actor_loss(policy, batch_tensors)
     policy.loss_stats["dynamics_loss"] = policy.dynamics_loss
