@@ -177,3 +177,17 @@ def test_gaussian_log_prob(model, state, action, batch_shape):
     next_states = model.sample(state, action, shape=sample_shape)
     log_prob = model.log_prob(state, action, next_states)
     assert log_prob.shape == sample_shape + batch_shape
+
+
+@pytest.mark.parametrize("model", get_models())
+def test_gaussian_log_prob_sampled(model, state, action, batch_shape):
+    next_state, log_prob = model.log_prob_sampled(state, action)
+    assert next_state.shape == state.shape
+    assert next_state.dtype == state.dtype
+    assert log_prob.shape == batch_shape
+
+    sample_shape = (10,)
+    next_states, log_prob = model.log_prob_sampled(state, action, shape=sample_shape)
+    assert next_states.shape == sample_shape + tuple(state.shape)
+    assert next_state.dtype == state.dtype
+    assert log_prob.shape == sample_shape + batch_shape
