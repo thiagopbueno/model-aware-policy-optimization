@@ -273,12 +273,11 @@ def build_action_sampler(policy, model, input_dict, obs_space, action_space, con
 
     def make_uniform_random_actions():
         # pure random exploration option
-        uniform_random_actions = tf.random.uniform(tf.shape(deterministic_actions))
-        # rescale uniform random actions according to action range
-        tf_range = tf.constant(action_space.high - action_space.low)
-        tf_low = tf.constant(action_space.low)
-        uniform_random_actions = uniform_random_actions * tf_range + tf_low
-        return uniform_random_actions
+        return tf.random.uniform(
+            tf.shape(deterministic_actions),
+            minval=action_space.low,
+            maxval=action_space.high,
+        )
 
     def make_exploration_actions():
         return tf.cond(
