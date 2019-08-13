@@ -91,9 +91,9 @@ def create_separate_optimizers(policy, config):
     policy.global_step = tf.Variable(0, trainable=False)
 
 
-def compute_separate_gradients(policy, *_):
+def compute_separate_gradients(policy, optimizer, loss):
     """Create compute gradients ops using separate optimizers."""
-    # pylint: disable=protected-access
+    # pylint: disable=protected-access,unused-argument
     actor_variables = policy.model.actor_variables
     critic_variables = policy.model.critic_variables
     dynamics_variables = policy.model.dynamics_variables
@@ -117,14 +117,14 @@ def compute_separate_gradients(policy, *_):
     )
 
 
-def apply_gradients_with_delays(policy, *_):
+def apply_gradients_with_delays(policy, optimizer, grads_and_vars):
     """
     Update actor and critic models with different frequencies.
 
     For policy gradient, update policy net one time v.s. update critic net
     `policy_delay` time(s). Also use `policy_delay` for target networks update.
     """
-    # pylint: disable=protected-access
+    # pylint: disable=protected-access,unused-argument
     with tf.control_dependencies([policy.global_step.assign_add(1)]):
         # Critic updates
         critic_op = policy._critic_optimizer.apply_gradients(
