@@ -9,46 +9,32 @@ from ray.rllib.models.catalog import ModelCatalog
 from ray.rllib.utils.error import UnsupportedSpaceException
 
 from mapo.agents.mapo.mapo_policy import (
+    AgentComponents,
+    _build_dynamics_mle_loss,
     create_separate_optimizers,
     compute_separate_gradients,
 )
 
 
-def _build_dynamics_mle_loss(policy, batch_tensors):
-    obs, actions, next_obs = (
-        batch_tensors[SampleBatch.CUR_OBS],
-        batch_tensors[SampleBatch.ACTIONS],
-        batch_tensors[SampleBatch.NEXT_OBS],
-    )
-    return -tf.reduce_mean(policy.model.compute_states_log_prob(obs, actions, next_obs))
-
-
-def _build_critic_targets(policy, batch_tensors):
+def _build_critic_targets(batch_tensors, model, action_space, config):
     rewards, dones, next_obs = (
         batch_tensors[SampleBatch.REWARDS],
         batch_tensors[SampleBatch.DONES],
         batch_tensors[SampleBatch.NEXT_OBS],
     )
-    gamma = policy.config["gamma"]
-    model = policy.model
+    gamma = config["gamma"]
     next_action = model.compute_actions(next_obs, target=True)
-    if policy.config["smooth_target_policy"]:
-        epsilon = tf.random.normal(
-            tf.shape(next_action), stddev=policy.config["target_noise"]
-        )
+    if config["smooth_target_policy"]:
+        epsilon = tf.random.normal(tf.shape(next_action), stddev=config["target_noise"])
         epsilon = tf.clip_by_value(
-            epsilon,
-            -policy.config["target_noise_clip"],
-            policy.config["target_noise_clip"],
+            epsilon, -config["target_noise_clip"], config["target_noise_clip"]
         )
         next_action = next_action + epsilon
-        next_action = tf.clip_by_value(
-            next_action, policy.action_space.low, policy.action_space.high
-        )
+        next_action = tf.clip_by_value(next_action, action_space.low, action_space.high)
     next_q_values = tf.squeeze(
         model.compute_q_values(next_obs, next_action, target=True)
     )
-    if policy.config["twin_q"]:
+    if config["twin_q"]:
         twin_q_values = model.compute_twin_q_values(next_obs, next_action, target=True)
         next_q_values = tf.math.minimum(next_q_values, tf.squeeze(twin_q_values))
     # Do not bootstrap if the state is terminal
@@ -56,39 +42,38 @@ def _build_critic_targets(policy, batch_tensors):
     return tf.compat.v2.where(dones, x=rewards, y=bootstrapped)
 
 
-def _build_critic_loss(policy, batch_tensors):
+def _build_critic_loss(batch_tensors, model, action_space, config):
     obs, actions = (
         batch_tensors[SampleBatch.CUR_OBS],
         batch_tensors[SampleBatch.ACTIONS],
     )
-    target_q_values = _build_critic_targets(policy, batch_tensors)
+    target_q_values = _build_critic_targets(batch_tensors, model, action_space, config)
     q_loss_criterion = keras.losses.MeanSquaredError()
-    q_pred = tf.squeeze(policy.model.compute_q_values(obs, actions))
-    q_stats = {
+    q_pred = tf.squeeze(model.compute_q_values(obs, actions))
+    fetches = {
         "q_mean": tf.reduce_mean(q_pred),
         "q_max": tf.reduce_max(q_pred),
         "q_min": tf.reduce_min(q_pred),
     }
-    policy.loss_stats.update(q_stats)
     critic_loss = q_loss_criterion(q_pred, target_q_values)
-    if policy.config["twin_q"]:
-        twin_q_pred = tf.squeeze(policy.model.compute_twin_q_values(obs, actions))
-        twin_q_stats = {
-            "twin_q_mean": tf.reduce_mean(twin_q_pred),
-            "twin_q_max": tf.reduce_max(twin_q_pred),
-            "twin_q_min": tf.reduce_min(twin_q_pred),
-        }
-        policy.loss_stats.update(twin_q_stats)
+    if config["twin_q"]:
+        twin_q_pred = tf.squeeze(model.compute_twin_q_values(obs, actions))
+        fetches.update(
+            {
+                "twin_q_mean": tf.reduce_mean(twin_q_pred),
+                "twin_q_max": tf.reduce_max(twin_q_pred),
+                "twin_q_min": tf.reduce_min(twin_q_pred),
+            }
+        )
         twin_q_loss = q_loss_criterion(twin_q_pred, target_q_values)
         critic_loss += twin_q_loss
-    return critic_loss
+    return critic_loss, fetches
 
 
-def _build_actor_loss(policy, batch_tensors):
+def _build_actor_loss(batch_tensors, model, config):
     obs = batch_tensors[SampleBatch.CUR_OBS]
-    gamma = policy.config["gamma"]
-    model = policy.model
-    n_samples = policy.config["branching_factor"]
+    gamma = config["gamma"]
+    n_samples = config["branching_factor"]
 
     policy_action = model.compute_actions(obs)
     sampled_next_state, next_state_log_prob = model.compute_log_prob_sampled(
@@ -103,10 +88,10 @@ def _build_actor_loss(policy, batch_tensors):
 
 
 def build_mapo_losses(policy, batch_tensors):
-    """Contruct actor (MADPG), critic (Fitted Q) and dynamics (MLE) losses."""
+    """Contruct dynamics (MLE/PG-aware), critic (Fitted Q) and actor (MADPG) losses."""
     policy.loss_stats = {}
     if policy.config["model_loss"] == "mle":
-        policy.dynamics_loss = _build_dynamics_mle_loss(policy, batch_tensors)
+        dynamics_loss = _build_dynamics_mle_loss(batch_tensors, policy.model)
     elif policy.config["model_loss"] == "pg-aware":
         raise NotImplementedError
     else:
@@ -115,12 +100,18 @@ def build_mapo_losses(policy, batch_tensors):
                 policy.config["model_loss"]
             )
         )
-    policy.critic_loss = _build_critic_loss(policy, batch_tensors)
-    policy.actor_loss = _build_actor_loss(policy, batch_tensors)
-    policy.loss_stats["dynamics_loss"] = policy.dynamics_loss
-    policy.loss_stats["critic_loss"] = policy.critic_loss
-    policy.loss_stats["actor_loss"] = policy.actor_loss
-    return policy.actor_loss + policy.critic_loss + policy.dynamics_loss
+    critic_loss, critic_stats = _build_critic_loss(
+        batch_tensors, policy.model, policy.action_space, policy.config
+    )
+    actor_loss = _build_actor_loss(batch_tensors, policy.model, policy.config)
+    policy.loss_stats.update(critic_stats)
+    policy.loss_stats["dynamics_loss"] = dynamics_loss
+    policy.loss_stats["critic_loss"] = critic_loss
+    policy.loss_stats["actor_loss"] = actor_loss
+    policy.mapo_losses = AgentComponents(
+        dynamics=dynamics_loss, critic=critic_loss, actor=actor_loss
+    )
+    return dynamics_loss + critic_loss + actor_loss
 
 
 def get_default_config():
@@ -152,28 +143,29 @@ def extra_loss_fetches(policy, _):
     return policy.loss_stats
 
 
-def apply_gradients_with_delays(policy, *_):
+def apply_gradients_with_delays(policy, optimizer, grads_and_vars):
     """
-    Update actor, critic and dynamics models with different frequencies.
+    Update actor and critic models with different frequencies.
 
-    Dynamics model is always updated. Actor and critic models can have different
-    update frequencies. Updates target networks along with actor.
+    For policy gradient, update policy net one time v.s. update critic net
+    `policy_delay` time(s). Also use `policy_delay` for target networks update.
     """
-    # pylint: disable=protected-access
+    # pylint: disable=unused-argument
+    dynamics_grads_and_vars, critic_grads_and_vars, actor_grads_and_vars = (
+        policy.all_grads_and_vars.dynamics,
+        policy.all_grads_and_vars.critic,
+        policy.all_grads_and_vars.actor,
+    )
     with tf.control_dependencies([policy.global_step.assign_add(1)]):
         # Dynamics updates
-        dynamics_op = policy._dynamics_optimizer.apply_gradients(
-            policy._dynamics_grads_and_vars
-        )
+        dynamics_op = optimizer.dynamics.apply_gradients(dynamics_grads_and_vars)
         # Critic updates
         should_apply_critic_opt = tf.equal(
             tf.math.mod(policy.global_step, policy.config["critic_delay"]), 0
         )
 
         def make_critic_apply_op():
-            return policy._critic_optimizer.apply_gradients(
-                policy._critic_grads_and_vars
-            )
+            return optimizer.critic.apply_gradients(critic_grads_and_vars)
 
         with tf.control_dependencies([dynamics_op]):
             critic_op = tf.cond(
@@ -185,7 +177,7 @@ def apply_gradients_with_delays(policy, *_):
         )
 
         def make_actor_apply_op():
-            return policy._actor_optimizer.apply_gradients(policy._actor_grads_and_vars)
+            return optimizer.actor.apply_gradients(actor_grads_and_vars)
 
         with tf.control_dependencies([critic_op]):
             actor_op = tf.cond(

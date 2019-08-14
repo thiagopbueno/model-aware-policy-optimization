@@ -32,8 +32,8 @@ def test_optimizer_global_step_update():
 
     sess = policy.get_session()
     assert sess.run(policy.global_step) == 10
-    assert sess.run(policy._actor_optimizer.iterations) == 5
-    assert sess.run(policy._critic_optimizer.iterations) == 10
+    assert sess.run(policy._optimizer.actor.iterations) == 5
+    assert sess.run(policy._optimizer.critic.iterations) == 10
 
 
 def test_actor_update_frequency():
