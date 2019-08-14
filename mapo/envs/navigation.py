@@ -78,6 +78,7 @@ class NavigationEnv(gym.Env):
         done = self._terminal()
         info = {}
         self._state = next_state
+        self._timestep += 1
         return self.obs, reward, done, info
 
     def reset(self):
