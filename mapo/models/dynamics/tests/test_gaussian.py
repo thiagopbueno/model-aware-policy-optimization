@@ -168,6 +168,14 @@ def test_gaussian_sample(model, state, action):
 
 
 @pytest.mark.parametrize("model", get_models())
+def test_gaussian_sample_propagates_gradients(model, state, action):
+    sample_shape = (10,)
+    next_states = model.sample(state, action, shape=sample_shape)
+    grads = tf.gradients(tf.reduce_sum(next_states), model.variables)
+    assert all(grad is not None for grad in grads)
+
+
+@pytest.mark.parametrize("model", get_models())
 def test_gaussian_log_prob(model, state, action, batch_shape):
     next_state = model.sample(state, action)
     log_prob = model.log_prob(state, action, next_state)

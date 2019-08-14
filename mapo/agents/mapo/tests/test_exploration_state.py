@@ -38,7 +38,7 @@ def test_pure_exploration():
     def rvs(size=1):
         return np.squeeze(policy.compute_actions(obs.repeat(size, axis=0), [])[0])
 
-    _, p_value = stats.kstest(rvs, cdf, N=4000)
+    _, p_value = stats.kstest(rvs, cdf, N=10000)
     assert p_value >= 0.05
 
 

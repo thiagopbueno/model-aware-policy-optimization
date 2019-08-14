@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 DEFAULT_CONFIG = with_common_config(
     {
+        # === MAPO ===
+        # How many samples to draw from the dynamics model
+        "branching_factor": 1,
         # === Model ===
         # actor and critic network configuration
         "model": merge_dicts(
@@ -34,6 +37,8 @@ DEFAULT_CONFIG = with_common_config(
         "actor_lr": 1e-3,
         # delayed policy update
         "policy_delay": 1,
+        # delayed critic update
+        "critic_delay": 1,
         # Which model-learning optimization to use
         # Valid values: "mle" (Maximum Likelihood Estimation),
         # "pg-aware" (DPG-aware loss function),
