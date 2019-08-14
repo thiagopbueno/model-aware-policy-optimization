@@ -36,7 +36,7 @@ DEFAULT_CONFIG = with_common_config(
         # Learning rate for the actor (policy) optimizer.
         "actor_lr": 1e-3,
         # delayed policy update
-        "policy_delay": 1,
+        "actor_delay": 1,
         # delayed critic update
         "critic_delay": 1,
         # Which model-learning optimization to use
