@@ -11,6 +11,7 @@ from ray.rllib.utils.error import UnsupportedSpaceException
 from mapo.agents.mapo.mapo_policy import (
     AgentComponents,
     _build_dynamics_mle_loss,
+    extra_loss_fetches,
     create_separate_optimizers,
     compute_separate_gradients,
 )
@@ -136,11 +137,6 @@ def ignore_timeout_termination(
     if episode and horizon and episode.length >= horizon:
         sample_batch[SampleBatch.DONES][-1] = False
     return sample_batch
-
-
-def extra_loss_fetches(policy, _):
-    """Add stats computed along with the loss function."""
-    return policy.loss_stats
 
 
 def apply_gradients_with_delays(policy, optimizer, grads_and_vars):

@@ -88,6 +88,11 @@ def compute_return(policy, sample_batch, other_agent_batches=None, episode=None)
     return compute_advantages(sample_batch, 0.0, policy.config["gamma"], use_gae=False)
 
 
+def extra_loss_fetches(policy, _):
+    """Add stats computed along with the loss function."""
+    return policy.loss_stats
+
+
 def create_separate_optimizers(policy, config):
     """Initialize optimizers and global step for update operations."""
     # pylint: disable=unused-argument
@@ -203,6 +208,7 @@ MAPOTFPolicy = build_tf_policy(
     loss_fn=build_mapo_losses,
     get_default_config=get_default_config,
     postprocess_fn=compute_return,
+    stats_fn=extra_loss_fetches,
     optimizer_fn=create_separate_optimizers,
     gradients_fn=compute_separate_gradients,
     apply_gradients_fn=apply_gradients_with_delays,
