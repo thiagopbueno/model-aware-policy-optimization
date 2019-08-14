@@ -2,6 +2,8 @@
 
 import numpy as np
 import gym
+import tensorflow as tf
+import tensorflow_probability as tfp
 
 
 DEFAULT_CONFIG = {
@@ -72,6 +74,21 @@ class NavigationEnv(gym.Env):
         self._state = None
         self._timestep = None
 
+        self._graph = tf.Graph()
+        with self._graph.as_default():  # pylint: disable=not-context-manager
+            self._state_placeholder = tf.placeholder(
+                tf.float32, shape=self._start.shape
+            )
+            self._action_placeholder = tf.placeholder(
+                tf.float32, shape=self._start.shape
+            )
+            self._transition_tensor = self._transition_fn(
+                self._state_placeholder, self._action_placeholder
+            )
+            self._reward_tensor = self._reward_fn(self._state_placeholder)
+
+        self._sess = tf.Session(graph=self._graph)
+
     def step(self, action):
         next_state = self._transition(self._state, action)
         reward = self._reward(self._state)
@@ -102,36 +119,46 @@ class NavigationEnv(gym.Env):
         return reached_goal or timeout
 
     def _transition(self, state, action):
-        noise = self._sample_noise()
+        feed_dict = {self._state_placeholder: state, self._action_placeholder: action}
+        return self._sess.run(self._transition_tensor, feed_dict=feed_dict)
 
+    def _reward(self, state):
+        feed_dict = {self._state_placeholder: state}
+        return self._sess.run(self._reward_tensor, feed_dict=feed_dict)
+
+    def _transition_fn(self, state, action):
         deceleration = 1.0
         if self._deceleration_zones:
             deceleration = self._deceleration()
 
+        noise = self._sample_noise()
         next_state = state + (deceleration * action) + noise
-        return next_state.astype(np.float32)
+        return next_state
 
-    def _reward(self, state):
-        return -np.linalg.norm(state - self._end)
+    def _reward_fn(self, state):
+        goal = tf.constant(self._end, name="goal")
+        return -tf.norm(state - goal)
 
     def _sample_noise(self):
         mean = self._noise["mean"]
         cov = self._noise["cov"]
-        sample = np.random.multivariate_normal(mean, cov)
+        tfd = tfp.distributions
+        dist = tfd.MultivariateNormalFullCovariance(loc=mean, covariance_matrix=cov)
+        sample = dist.sample()
         return sample
 
     def _deceleration(self):
-        decay = self._deceleration_decay
-        center = self._deceleration_center
+        decay = tf.constant(self._deceleration_decay, name="decay")
+        center = tf.constant(self._deceleration_center, name="center")
         distance = self._distance_to_deceleration_zones(center)
-        deceleration = np.prod(self._deceleration_factors(decay, distance))
+        deceleration = tf.reduce_prod(self._deceleration_factors(decay, distance))
         return deceleration
 
     def _distance_to_deceleration_zones(self, center):
-        distance = np.linalg.norm(self._state - center, axis=1)
+        distance = tf.norm(self._state_placeholder - center, axis=1)
         return distance
 
     @staticmethod
     def _deceleration_factors(decay, distance):
-        factor = 2 / (1.0 + np.exp(-decay * distance)) - 1.0
+        factor = 2 / (1.0 + tf.exp(-decay * distance)) - 1.0
         return factor
