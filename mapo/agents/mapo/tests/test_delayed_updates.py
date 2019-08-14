@@ -8,7 +8,7 @@ from mapo.agents.mapo.off_mapo_policy import OffMAPOTFPolicy
 
 
 def test_target_network_initialization():
-    worker = RolloutWorker(MockEnv, OffMAPOTFPolicy, policy_config={"policy_delay": 2})
+    worker = RolloutWorker(MockEnv, OffMAPOTFPolicy, policy_config={"actor_delay": 2})
     policy = worker.get_policy()
 
     def get_main_target_vars():
@@ -24,7 +24,7 @@ def test_target_network_initialization():
 
 def test_optimizer_global_step_update():
     # pylint: disable=protected-access
-    worker = RolloutWorker(MockEnv, OffMAPOTFPolicy, policy_config={"policy_delay": 2})
+    worker = RolloutWorker(MockEnv, OffMAPOTFPolicy, policy_config={"actor_delay": 2})
     policy = worker.get_policy()
 
     for _ in range(10):
@@ -37,7 +37,7 @@ def test_optimizer_global_step_update():
 
 
 def test_actor_update_frequency():
-    worker = RolloutWorker(MockEnv, OffMAPOTFPolicy, policy_config={"policy_delay": 2})
+    worker = RolloutWorker(MockEnv, OffMAPOTFPolicy, policy_config={"actor_delay": 2})
     policy = worker.get_policy()
 
     def get_actor_vars():
@@ -55,7 +55,7 @@ def test_actor_update_frequency():
 
 
 def test_target_update_frequency():
-    worker = RolloutWorker(MockEnv, OffMAPOTFPolicy, policy_config={"policy_delay": 2})
+    worker = RolloutWorker(MockEnv, OffMAPOTFPolicy, policy_config={"actor_delay": 2})
     policy = worker.get_policy()
 
     def get_target_vars():

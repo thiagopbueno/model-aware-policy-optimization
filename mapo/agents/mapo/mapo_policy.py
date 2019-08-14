@@ -136,7 +136,7 @@ def apply_gradients_with_delays(policy, optimizer, grads_and_vars):
     Update actor and critic models with different frequencies.
 
     For policy gradient, update policy net one time v.s. update critic net
-    `policy_delay` time(s). Also use `policy_delay` for target networks update.
+    `actor_delay` time(s). Also use `actor_delay` for target networks update.
     """
     # pylint: disable=unused-argument
     dynamics_grads_and_vars, critic_grads_and_vars, actor_grads_and_vars = (
@@ -161,7 +161,7 @@ def apply_gradients_with_delays(policy, optimizer, grads_and_vars):
             )
         # Actor updates
         should_apply_actor_opt = tf.equal(
-            tf.math.mod(policy.global_step, policy.config["policy_delay"]), 0
+            tf.math.mod(policy.global_step, policy.config["actor_delay"]), 0
         )
 
         def make_actor_apply_op():
