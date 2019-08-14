@@ -1,4 +1,6 @@
 # pylint: disable=missing-docstring, redefined-outer-name
+import itertools
+
 import pytest
 from gym.spaces import Box
 import numpy as np
@@ -33,42 +35,16 @@ def get_models():
             1,
             model_config,
             "test_model",
-            target_networks=False,
-            twin_q=False,
-        ),
-        MAPOModel(
-            obs_space,
-            action_space,
-            1,
-            model_config,
-            "test_model",
-            target_networks=True,
-            twin_q=False,
-        ),
-        MAPOModel(
-            obs_space,
-            action_space,
-            1,
-            model_config,
-            "test_model",
-            target_networks=False,
-            twin_q=True,
-        ),
-        MAPOModel(
-            obs_space,
-            action_space,
-            1,
-            model_config,
-            "test_model",
-            target_networks=True,
-            twin_q=True,
-        ),
+            target_networks=build_targets,
+            twin_q=build_twin,
+        )
+        for build_targets, build_twin in itertools.product([True, False], [True, False])
     ]
     return models
 
 
 def get_models_with_targets():
-    return get_models()[1:4:2]
+    return [model for model in get_models() if hasattr(model, "target_models")]
 
 
 @pytest.fixture
