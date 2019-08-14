@@ -1,25 +1,6 @@
 """MAPO: Model-Aware Policy Optimization in RLlib."""
 
 
-def register_all_environments():
-    """Register all custom environments in gym."""
-    from gym.envs.registration import register
-
-    register(
-        id="Navigation-v0",
-        entry_point="mapo.envs:NavigationEnv",
-        max_episode_steps=100,
-        kwargs={"deceleration_zones": {}},
-    )
-
-    register(
-        id="Navigation-v1",
-        entry_point="mapo.envs:NavigationEnv",
-        max_episode_steps=100,
-        kwargs={},
-    )
-
-
 def register_all_agents():
     """Register all trainer names in Tune."""
     from ray.tune import register_trainable
@@ -27,3 +8,12 @@ def register_all_agents():
 
     for name, trainer_import in ALGORITHMS.items():
         register_trainable(name, trainer_import())
+
+
+def register_all_environments():
+    """Register all custom environments in Tune."""
+    from ray.tune import register_env
+    from mapo.envs.registry import ENVS
+
+    for name, env_import in ENVS.items():
+        register_env(name, env_import)

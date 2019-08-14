@@ -2,25 +2,30 @@
 from tensorflow import keras
 
 DEFAULT_CONFIG = {
+    "layers": (400, 300),
     "activation": "relu",
-    "layers": [400, 300],
     "layer_normalization": False,
 }
 
 
-def build_fcnet(input_shape, config=None):
-    """Construct a fully connected Keras model on inputs."""
-    config = config or {}
+def build_fcnet(config):
+    """Construct a fully connected Keras model.
+
+    Variables are lazily initialized.
+
+    Return:
+        model(keras.Sequential): a fully connected network
+    """
     config = {**DEFAULT_CONFIG, **config}
     activation = config["activation"]
     layer_norm = config["layer_normalization"]
 
-    inputs = output = keras.Input(shape=input_shape)
+    model = keras.Sequential()
     for units in config["layers"]:
         if layer_norm:
-            output = keras.layers.Dense(units=units)(output)
-            output = keras.layers.LayerNormalization(output)
-            output = keras.activations.get(activation)(output)
+            model.add(keras.layers.Dense(units=units))
+            model.add(keras.layers.LayerNormalization())
+            model.add(keras.activations.get(activation))
         else:
-            output = keras.layers.Dense(units=units, activation=activation)(output)
-    return keras.Model(inputs=inputs, outputs=output)
+            model.add(keras.layers.Dense(units=units, activation=activation))
+    return model

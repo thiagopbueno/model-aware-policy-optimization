@@ -1,0 +1,239 @@
+#! /usr/bin/env python3
+
+"""MAPO running script."""
+
+# pylint: disable=import-self, no-name-in-module
+
+import argparse
+import json
+import ray
+from ray import tune
+from mapo import register_all_agents, register_all_environments
+from mapo.version import __version__
+
+
+def read_config_json(filepath):
+    """Load JSON object from file."""
+    with open(filepath, "r") as file:
+        return json.loads(file.read())
+
+
+def parse_args():
+    """Parse command-line arguments."""
+    description = "Model-Aware Policy Optimization ({})".format(__version__)
+    usage = (
+        "%(prog)s --run {MAPO,OffMAPO} [--model-learning {MLE,PGA}]"
+        " --env ENV [ENV ...] [CONFIG-OPTIONS]"
+    )
+
+    parser = argparse.ArgumentParser(usage=usage, description=description)
+
+    parser.add_argument(
+        "--run",
+        type=str,
+        choices=["MAPO", "OffMAPO"],
+        required=True,
+        help="The algorithm or model to train.",
+    )
+    parser.add_argument(
+        "--model-learning",
+        type=str,
+        choices=["mle", "pg-aware"],
+        default="pg-aware",
+        help="The loss function used for learning the dynamics model. "
+        "(default=pg-aware)",
+    )
+    parser.add_argument(
+        "--env",
+        type=str,
+        nargs="+",
+        default=[],
+        required=True,
+        help="The gym environment to use.",
+    )
+    parser.add_argument(
+        "--verbose",
+        type=int,
+        choices=[0, 1, 2],
+        default=2,
+        help="0, 1, or 2. Verbosity mode. 0 = silent, "
+        "1 = only status updates, 2 = status and trial results "
+        "(default=2)",
+    )
+
+    model_args_group = parser.add_argument_group(">> Model")
+    model_args_group.add_argument(
+        "--config-actor-net",
+        type=read_config_json,
+        help="The actor network configuration JSON file.",
+    )
+    model_args_group.add_argument(
+        "--config-critic-net",
+        type=read_config_json,
+        help="The critic network configuration JSON file.",
+    )
+    model_args_group.add_argument(
+        "--config-dynamics-net",
+        type=read_config_json,
+        help="The dynamics network configuration JSON file.",
+    )
+
+    optimizers_args_group = parser.add_argument_group(">> Optimization")
+    optimizers_args_group.add_argument(
+        "--actor-lr",
+        type=float,
+        default=1e-3,
+        help="The learning rate for the actor (policy) optimizer " "(defaul=1e-3).",
+    )
+    optimizers_args_group.add_argument(
+        "--critic-lr",
+        type=float,
+        default=1e-3,
+        help="The learning rate for the critic (Q-function) optimizer "
+        "(defaul=1e-3).",
+    )
+    optimizers_args_group.add_argument(
+        "--dynamics-lr",
+        type=float,
+        default=1e-3,
+        help="The learning rate for the dynamics optimizer (defaul=1e-3).",
+    )
+    optimizers_args_group.add_argument(
+        "--policy-delay",
+        type=int,
+        default=2,
+        help="The number of traing steps before updating the policy " "(default=2).",
+    )
+    optimizers_args_group.add_argument(
+        "--critic-delay",
+        type=int,
+        default=1,
+        help="The number of traing steps before updating the critic " "(default=2).",
+    )
+
+    exec_args_group = parser.add_argument_group(">> Execution")
+    exec_args_group.add_argument(
+        "--timesteps-total",
+        type=int,
+        default=1000,
+        help="The total number of timesteps (default=1000).",
+    )
+    exec_args_group.add_argument(
+        "--sample-batch-size",
+        type=int,
+        default=10,
+        help="The size of the batch collected by workers (default=10).",
+    )
+    exec_args_group.add_argument(
+        "--train-batch-size",
+        type=int,
+        default=100,
+        help="The size of the batch for training (default=100).",
+    )
+
+    resources_args_group = parser.add_argument_group(">> Resources")
+    resources_args_group.add_argument(
+        "--num-workers",
+        type=int,
+        default=0,
+        help="The number of actors used for parallelism (default=0).",
+    )
+    resources_args_group.add_argument(
+        "--num-gpus",
+        type=float,
+        default=0.0,
+        help="The number of GPUs to allocate to the driver (default=0.0).",
+    )
+    resources_args_group.add_argument(
+        "--num-cpus-for-driver",
+        type=int,
+        default=1,
+        help="The number of CPUs to allocate to the driver (default=1).",
+    )
+
+    exp_args_group = parser.add_argument_group(">> Experiment")
+    exp_args_group.add_argument(
+        "--num-samples",
+        type=int,
+        default=1,
+        help="The number of times to sample from the hyperparameter space "
+        "(default=1).",
+    )
+    exp_args_group.add_argument("--name", type=str, help="The name of the experiment.")
+
+    return parser.parse_args()
+
+
+def init():
+    """Initialize ray framework."""
+    ray.init()
+
+
+def register():
+    """Register all agents and custom environtments."""
+    register_all_agents()
+    register_all_environments()
+
+
+def run(args):
+    """Run experiments with configuration given by command-line arguments."""
+    trainer = args.run
+    experiment = args.name
+
+    analysis = tune.run(
+        trainer,
+        name=experiment,
+        verbose=args.verbose,
+        stop={"timesteps_total": args.timesteps_total},
+        # resources_per_trial={
+        #     "cpu": args.num_cpus_for_driver,
+        #     "gpu": args.num_gpus,
+        # },
+        config={
+            "env": tune.grid_search(args.env),
+            "model": {
+                "custom_model": "mapo_model",
+                "custom_options": {
+                    "actor": args.config_actor_net,
+                    "critic": args.config_critic_net,
+                    "dynamics": args.config_dynamics_net,
+                },
+            },
+            "num_workers": args.num_workers,
+            "sample_batch_size": args.sample_batch_size,
+            "train_batch_size": args.train_batch_size,
+            "policy_delay": args.policy_delay,
+            "critic_delay": args.critic_delay,
+            "actor_lr": args.actor_lr,
+            "critic_lr": args.critic_lr,
+            "dynamics_lr": args.dynamics_lr,
+        },
+        num_samples=args.num_samples,
+    )
+
+    return analysis
+
+
+def report(analysis):
+    """Report analysis for best configuraion in experiments."""
+    best_config = analysis.get_best_config("episode_reward_mean", mode="max")
+    best_logdir = analysis.get_best_logdir("episode_reward_mean", mode="max")
+
+    print(">> Best configuration:")
+    print(json.dumps(best_config, indent=2, sort_keys=True))
+    print()
+
+    print("tensorboard --logdir={}".format(best_logdir))
+    print()
+
+
+if __name__ == "__main__":
+    # pylint: disable=invalid-name
+
+    arguments = parse_args()
+
+    init()
+    register()
+
+    results = run(arguments)
+    report(results)
