@@ -38,7 +38,7 @@ setup(
     keywords=["reinforcement-learning", "model-based", "rllib", "tensorflow"],
     url="",
     packages=find_packages(),
-    scripts=[],
+    scripts=["scripts/mapo"],
     install_requires=[
         "gym",
         "ray[rllib]==0.7.3",
