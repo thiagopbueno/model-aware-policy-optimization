@@ -6,6 +6,7 @@ import pytest
 
 import numpy as np
 import gym
+import tensorflow as tf
 
 import mapo
 from mapo.envs.registry import _import_navigation_v0, _import_navigation_v1
@@ -64,61 +65,68 @@ def test_reset(env):
 
 @pytest.mark.parametrize("env", get_gym_envs())
 def test_sample_noise(env):
-    noise = env._sample_noise()
-    assert noise.shape == env._start.shape
+    with env._graph.as_default():
+        noise = env._sample_noise()
+        assert noise.shape == env._start.shape
 
 
 @pytest.mark.parametrize("env", get_gym_envs())
 def test_distance_to_deceleration_zones(env):
-    if env._deceleration_zones:
-        center = env._deceleration_center
-        distance = env._distance_to_deceleration_zones(center)
-        assert distance.shape == (len(env._deceleration_zones["center"]),)
-        assert distance.shape == (len(env._deceleration_zones["decay"]),)
+    with env._graph.as_default():
+        if env._deceleration_zones:
+            center = env._deceleration_center
+            distance = env._distance_to_deceleration_zones(center)
+            assert distance.shape == (len(env._deceleration_zones["center"]),)
+            assert distance.shape == (len(env._deceleration_zones["decay"]),)
 
 
 @pytest.mark.parametrize("env", get_gym_envs())
 def test_deceleration_factors(env):
-    if env._deceleration_zones:
-        decay = env._deceleration_decay
-        center = env._deceleration_center
-        distance = env._distance_to_deceleration_zones(center)
-        factor = env._deceleration_factors(decay, distance)
-        assert factor.shape == (len(env._deceleration_zones["center"]),)
-        assert factor.shape == (len(env._deceleration_zones["decay"]),)
+    with env._graph.as_default():
+        if env._deceleration_zones:
+            decay = env._deceleration_decay
+            center = env._deceleration_center
+            distance = env._distance_to_deceleration_zones(center)
+            factor = env._deceleration_factors(decay, distance)
+            assert factor.shape == (len(env._deceleration_zones["center"]),)
+            assert factor.shape == (len(env._deceleration_zones["decay"]),)
 
 
 @pytest.mark.parametrize("env", get_gym_envs())
 def test_transition(env):
-    action_low = env.action_space.low
-    action_high = env.action_space.high
+    with env._graph.as_default():
+        action_low = env.action_space.low
+        action_high = env.action_space.high
 
-    state = env.obs
-    action = np.random.uniform(low=action_low, high=action_high)
-    next_states = []
+        state = env.obs
+        action = np.random.uniform(low=action_low, high=action_high)
+        next_states = []
 
-    for _ in range(1000):
-        next_state = env._transition(state, action)
-        next_states.append(next_state)
-        assert next_state.shape == state.shape
+        for _ in range(1000):
+            next_state = env._transition(state, action)
+            next_states.append(next_state)
+            assert next_state.shape == state.shape
 
-    next_states = np.array(next_states, dtype=np.float32)
+        next_states = np.array(next_states, dtype=np.float32)
 
-    if env._deceleration_zones:
-        deceleration = env._deceleration()
-        noises = next_states - state - deceleration * action
-        noise_mean = np.mean(noises, axis=0)
-        noise_cov = np.cov(noises.T)
-        assert np.allclose(noise_mean, env._noise["mean"], atol=1e-1)
-        assert np.allclose(noise_cov, env._noise["cov"], atol=1e-1)
+        if env._deceleration_zones:
+            with tf.Session(graph=env._graph) as sess:
+                feed_dict = {env._state_placeholder: state}
+                deceleration = sess.run(env._deceleration(), feed_dict=feed_dict)
+            noises = next_states - state - deceleration * action
+            noise_mean = np.mean(noises, axis=0)
+            noise_cov = np.cov(noises.T)
+            assert np.allclose(noise_mean, env._noise["mean"], atol=1e-1)
+            assert np.allclose(noise_cov, env._noise["cov"], atol=1e-1)
 
 
 @pytest.mark.parametrize("env", get_gym_envs())
 def test_reward(env):
-    reward = env._reward(env._end)
-    assert np.allclose(reward, 0.0)
-    reward = env._reward(env._start)
-    assert np.allclose(reward, -np.sqrt(2 * 20 ** 2))
+    with env._graph.as_default():
+        reward = env._reward(env._end)
+        assert np.allclose(reward, 0.0)
+        reward = env._reward(env._start)
+        assert np.allclose(reward, -np.sqrt(2 * 20 ** 2))
 
 
 @pytest.mark.parametrize("env", get_gym_envs())
