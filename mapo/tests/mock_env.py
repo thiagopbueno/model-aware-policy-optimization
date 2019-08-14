@@ -4,7 +4,12 @@ from gym.spaces import Box
 import numpy as np
 
 
-_DEFAULT_CONFIG = {"action_dim": 4, "action_low": -1, "action_high": 1}
+_DEFAULT_CONFIG = {
+    "action_dim": 4,
+    "action_low": -1,
+    "action_high": 1,
+    "fixed_state": False,
+}
 
 
 class MockEnv(gym.Env):  # pylint: disable=abstract-method
@@ -21,11 +26,21 @@ class MockEnv(gym.Env):  # pylint: disable=abstract-method
         self.action_space = Box(
             low=low, high=high, shape=(action_dim,), dtype=np.float32
         )
+        self.next_state = (
+            self.observation_space.sample() if self.config["fixed_state"] else None
+        )
 
     def reset(self):
         self.time = 0
-        return self.observation_space.sample()
+        return self._next_state()
 
     def step(self, action):
         self.time += 1
-        return self.observation_space.sample(), 1, self.time >= self.horizon, {}
+        return self._next_state(), 1, self.time >= self.horizon, {}
+
+    def _next_state(self):
+        return (
+            self.next_state
+            if self.next_state is not None
+            else self.observation_space.sample()
+        )
