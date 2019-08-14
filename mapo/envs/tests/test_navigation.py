@@ -9,6 +9,7 @@ import gym
 import tensorflow as tf
 
 import mapo
+from mapo.envs.registry import _import_navigation_v0, _import_navigation_v1
 from mapo.envs.navigation import NavigationEnv, DEFAULT_CONFIG as config
 
 
@@ -16,12 +17,12 @@ mapo.register_all_environments()
 
 
 def get_gym_envs():
-    env0 = gym.make("Navigation-v0")
-    env1 = gym.make("Navigation-v1")
+    env0 = _import_navigation_v0(None)
+    env1 = _import_navigation_v1(None)
     envs = [env0, env1]
     for env in envs:
         env.reset()
-    return [env.env for env in envs]
+    return envs
 
 
 @pytest.mark.parametrize("env", get_gym_envs())
