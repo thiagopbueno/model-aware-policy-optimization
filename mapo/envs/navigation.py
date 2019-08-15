@@ -137,7 +137,7 @@ class NavigationEnv(gym.Env):
 
     def _reward_fn(self, state):
         goal = tf.constant(self._end, name="goal")
-        return -tf.norm(state - goal)
+        return -tf.norm(state - goal)  # pylint: disable=invalid-unary-operand-type
 
     def _sample_noise(self):
         mean = self._noise["mean"]
