@@ -1,5 +1,6 @@
 """Tests regarding exploration features in OffMAPO."""
 # pylint: disable=missing-docstring
+import pytest
 import numpy as np
 import scipy.stats as stats
 from ray.rllib.evaluation import RolloutWorker
@@ -22,6 +23,7 @@ def test_deterministic_evaluation():
     assert np.allclose(action1, action2)
 
 
+@pytest.mark.slow
 def test_pure_exploration():
     env = MockEnv({"action_dim": 1})
     ob_space, ac_space = env.observation_space, env.action_space
@@ -42,6 +44,7 @@ def test_pure_exploration():
     assert p_value >= 0.05
 
 
+@pytest.mark.slow
 def test_iid_gaussian_exploration():
     # Expand bounds so that almost no distribution samples are clipped to range
     env = MockEnv({"action_dim": 1, "action_low": -100, "action_high": 100})
