@@ -47,6 +47,10 @@ def get_models_with_targets():
     return [model for model in get_models() if hasattr(model, "target_models")]
 
 
+def get_models_with_twin_qs():
+    return [model for model in get_models() if model.twin_q]
+
+
 @pytest.fixture
 def input_dict():
     obs_space, action_space = get_spaces()
@@ -167,4 +171,16 @@ def test_uses_target_models(model, obs_ph, action_ph):
     assert all(
         grad is None
         for grad in tf.gradients(tf.reduce_sum(values), model.critic_variables)
+    )
+
+
+@pytest.mark.parametrize("model", get_models_with_twin_qs())
+def test_creates_twin_q_vars(model):
+    critic_vars = model.critic_variables
+    q_vars, twin_q_vars = (
+        critic_vars[: len(critic_vars)],
+        critic_vars[len(critic_vars) :],
+    )
+    assert all(
+        var.shape == twin_var.shape for var, twin_var in zip(q_vars, twin_q_vars)
     )
