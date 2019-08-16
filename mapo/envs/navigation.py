@@ -41,7 +41,6 @@ class NavigationEnv(MAPOTFCustomEnv):
     metadata = {"render.modes": ["human"]}
 
     def __init__(self, **kwargs):
-        super(NavigationEnv, self).__init__(state_shape=(2,), action_shape=(2,))
 
         self._config = {**DEFAULT_CONFIG, **kwargs}
 
@@ -55,7 +54,7 @@ class NavigationEnv(MAPOTFCustomEnv):
             self._config["action_upper_bound"], dtype=np.float32
         )
 
-        self.obs_space = gym.spaces.Box(
+        self.observation_space = gym.spaces.Box(
             low=-np.inf, high=np.inf, shape=(2,), dtype=np.float32
         )
         self.action_space = gym.spaces.Box(
@@ -74,6 +73,8 @@ class NavigationEnv(MAPOTFCustomEnv):
         self._noise = self._config["noise"]
 
         self._horizon = self._config["horizon"]
+
+        super(NavigationEnv, self).__init__(state_shape=(2,), action_shape=(2,))
 
     def render(self, mode="human"):
         pass
