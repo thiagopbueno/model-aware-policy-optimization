@@ -27,16 +27,31 @@ class MAPOTFCustomEnv(gym.Env):
         self._timestep = None
 
         self._graph = tf.Graph()
+        self._build_ops()
+        self._sess = tf.Session(graph=self._graph)
+
+    def _build_ops(self):
+
         with self._graph.as_default():  # pylint: disable=not-context-manager
-            self._state_placeholder = tf.placeholder(tf.float32, shape=self.state_shape)
-            self._action_placeholder = tf.placeholder(
+
+            self._state_placeholder = tf.compat.v1.placeholder(
+                tf.float32, shape=self.state_shape
+            )
+            self._action_placeholder = tf.compat.v1.placeholder(
                 tf.float32, shape=self.action_shape
             )
-            self._next_state_placeholder = tf.placeholder(
+            self._next_state_placeholder = tf.compat.v1.placeholder(
                 tf.float32, shape=self.state_shape
             )
 
-        self._sess = tf.Session(graph=self._graph)
+            self._transition_tensor = self._transition_fn(
+                self._state_placeholder, self._action_placeholder
+            )
+            self._reward_tensor = self._reward_fn(
+                self._state_placeholder,
+                self._action_placeholder,
+                self._next_state_placeholder,
+            )
 
     def step(self, action):
         next_state = self._transition(self._state, action)
@@ -80,26 +95,10 @@ class MAPOTFCustomEnv(gym.Env):
         raise NotImplementedError
 
     def _transition(self, state, action):
-        # pylint: disable=attribute-defined-outside-init
-        if not hasattr(self, "_transition_tensor"):
-            with self._graph.as_default():  # pylint: disable=not-context-manager
-                self._transition_tensor = self._transition_fn(
-                    self._state_placeholder, self._action_placeholder
-                )
-
         feed_dict = {self._state_placeholder: state, self._action_placeholder: action}
         return self._sess.run(self._transition_tensor, feed_dict=feed_dict)
 
     def _reward(self, state, action, next_state):
-        # pylint: disable=attribute-defined-outside-init
-        if not hasattr(self, "_reward_tensor"):
-            with self._graph.as_default():  # pylint: disable=not-context-manager
-                self._reward_tensor = self._reward_fn(
-                    self._state_placeholder,
-                    self._action_placeholder,
-                    self._next_state_placeholder,
-                )
-
         feed_dict = {
             self._state_placeholder: state,
             self._action_placeholder: action,
