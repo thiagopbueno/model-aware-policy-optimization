@@ -2,14 +2,14 @@
 
 
 def _import_navigation_v0(_):
-    from mapo.envs import NavigationEnv
+    from mapo.envs.navigation import NavigationEnv
 
     config = {"deceleration_zones": {}}
     return NavigationEnv(**config)
 
 
 def _import_navigation_v1(_):
-    from mapo.envs import NavigationEnv
+    from mapo.envs.navigation import NavigationEnv
 
     config = {}
     return NavigationEnv(**config)

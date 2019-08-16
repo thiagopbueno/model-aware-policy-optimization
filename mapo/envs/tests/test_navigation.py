@@ -38,7 +38,7 @@ def test_navigation_config(env):
 
 @pytest.mark.parametrize("env", get_gym_envs())
 def test_observation_space(env):
-    observation_space = env.observation_space
+    observation_space = env.obs_space
     assert isinstance(observation_space, gym.spaces.Box)
     assert not observation_space.bounded_below.all()
     assert not observation_space.bounded_above.all()
@@ -123,9 +123,12 @@ def test_transition(env):
 @pytest.mark.parametrize("env", get_gym_envs())
 def test_reward(env):
     with env._graph.as_default():
-        reward = env._reward(env._end)
+        dummy_action = env.action_space.sample()
+        dummy_next_state = env.obs_space.sample()
+
+        reward = env._reward(env._end, dummy_action, dummy_next_state)
         assert np.allclose(reward, 0.0)
-        reward = env._reward(env._start)
+        reward = env._reward(env._start, dummy_action, dummy_next_state)
         assert np.allclose(reward, -np.sqrt(2 * 20 ** 2))
 
 
