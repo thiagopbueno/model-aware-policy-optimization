@@ -15,6 +15,12 @@ DEFAULT_CONFIG = with_common_config(
         # === MAPO ===
         # How many samples to draw from the dynamics model
         "branching_factor": 1,
+        # Whether to use the env's dynamics to calculate the actor loss
+        "use_true_dynamics": False,
+        # Which model-learning optimization to use
+        # Valid values: "mle" (Maximum Likelihood Estimation),
+        # "pga" (DPG-aware loss function),
+        "model_loss": "mle",
         # === Model ===
         # actor and critic network configuration
         "model": merge_dicts(
@@ -39,10 +45,6 @@ DEFAULT_CONFIG = with_common_config(
         "actor_delay": 1,
         # delayed critic update
         "critic_delay": 1,
-        # Which model-learning optimization to use
-        # Valid values: "mle" (Maximum Likelihood Estimation),
-        # "pg-aware" (DPG-aware loss function),
-        "model_loss": "mle",
         # === Resources ===
         # Number of actors used for parallelism
         "num_workers": 0,
@@ -52,6 +54,18 @@ DEFAULT_CONFIG = with_common_config(
 )
 
 
+def validate_config(config):
+    """Check for incorrect choices in config."""
+    assert config["model"]["custom_model"] == "mapo_model", "MAPO depends on MAPOModel"
+    assert config["model_loss"] in {
+        "mle",
+        "pga",
+    }, "Unknown model_loss '{}' (try 'mle' or 'pga')".format(config["model_loss"])
+
+
 MAPOTrainer = build_trainer(
-    name="MAPO", default_policy=MAPOTFPolicy, default_config=DEFAULT_CONFIG
+    name="MAPO",
+    default_policy=MAPOTFPolicy,
+    default_config=DEFAULT_CONFIG,
+    validate_config=validate_config,
 )
