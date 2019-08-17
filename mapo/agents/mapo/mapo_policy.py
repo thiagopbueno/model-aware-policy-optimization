@@ -5,67 +5,32 @@ import tensorflow as tf
 from tensorflow import keras
 from gym.spaces import Box
 
+from ray.tune.registry import ENV_CREATOR, _global_registry
 from ray.rllib.policy import build_tf_policy
 from ray.rllib.utils.error import UnsupportedSpaceException
 from ray.rllib.policy.sample_batch import SampleBatch
 from ray.rllib.models.catalog import ModelCatalog
-from ray.rllib.evaluation.postprocessing import compute_advantages, Postprocessing
+from ray.rllib.evaluation.postprocessing import compute_advantages
+
+import mapo.agents.mapo.losses as losses
 
 
 AgentComponents = namedtuple("AgentComponents", "dynamics critic actor")
 
 
-def _build_dynamics_mle_loss(batch_tensors, model):
-    obs, actions, next_obs = (
-        batch_tensors[SampleBatch.CUR_OBS],
-        batch_tensors[SampleBatch.ACTIONS],
-        batch_tensors[SampleBatch.NEXT_OBS],
-    )
-    return -tf.reduce_mean(model.compute_states_log_prob(obs, actions, next_obs))
-
-
-def _build_critic_loss(batch_tensors, model):
-    # Fitted Q loss (using trajectory returns)
-    obs, actions, returns = (
-        batch_tensors[SampleBatch.CUR_OBS],
-        batch_tensors[SampleBatch.ACTIONS],
-        batch_tensors[Postprocessing.ADVANTAGES],
-    )
-    return keras.losses.mean_squared_error(
-        model.compute_q_values(obs, actions), returns
-    )
-
-
-def _build_actor_loss(batch_tensors, model, config):
-    obs = batch_tensors[SampleBatch.CUR_OBS]
-    gamma = config["gamma"]
-    n_samples = config["branching_factor"]
-    policy_action = model.compute_actions(obs)
-    sampled_next_state, next_state_log_prob = model.compute_log_prob_sampled(
-        obs, policy_action, (n_samples,)
-    )
-    next_state_value = tf.stop_gradient(model.compute_state_values(sampled_next_state))
-    model_aware_policy_loss = tf.reduce_mean(
-        gamma * tf.reduce_mean(next_state_log_prob * next_state_value, axis=0)
-    )
-    return model_aware_policy_loss
-
-
 def build_mapo_losses(policy, batch_tensors):
     """Contruct dynamics (MLE/PG-aware), critic (Fitted Q) and actor (MADPG) losses."""
-    policy.loss_stats = {}
-    if policy.config["model_loss"] == "mle":
-        dynamics_loss = _build_dynamics_mle_loss(batch_tensors, policy.model)
-    elif policy.config["model_loss"] == "pg-aware":
-        raise NotImplementedError
-    else:
-        raise ValueError(
-            "Unknown model_loss '{}' (try 'mle' or 'pg-aware')".format(
-                policy.config["model_loss"]
-            )
+    model, config = policy.model, policy.config
+    env = _global_registry.get(ENV_CREATOR, config["env"])(config["env_config"])
+    actor_loss = losses.actor_model_aware_loss(batch_tensors, model, env, config)
+    if config["model_loss"] == "pga":
+        dynamics_loss = losses.dynamics_pga_loss(
+            batch_tensors, model, actor_loss, config
         )
-    critic_loss = _build_critic_loss(batch_tensors, policy.model)
-    actor_loss = _build_actor_loss(batch_tensors, policy.model, policy.config)
+    else:
+        dynamics_loss = losses.dynamics_mle_loss(batch_tensors, model)
+    critic_loss = losses.critic_return_loss(batch_tensors, model)
+    policy.loss_stats = {}
     policy.loss_stats["dynamics_loss"] = dynamics_loss
     policy.loss_stats["critic_loss"] = critic_loss
     policy.loss_stats["actor_loss"] = actor_loss

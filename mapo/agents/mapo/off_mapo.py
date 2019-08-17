@@ -5,7 +5,7 @@ import logging
 from ray.rllib.agents.trainer_template import build_trainer
 from ray.rllib.optimizers import SyncReplayOptimizer
 from ray.rllib.utils import merge_dicts
-from mapo.agents.mapo import DEFAULT_CONFIG as BASE_CONFIG
+from mapo.agents.mapo.mapo import validate_config, DEFAULT_CONFIG as BASE_CONFIG
 from mapo.agents.mapo.off_mapo_policy import OffMAPOTFPolicy
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -118,6 +118,7 @@ OffMAPOTrainer = build_trainer(
     name="OffMAPO",
     default_policy=OffMAPOTFPolicy,
     default_config=DEFAULT_CONFIG,
+    validate_config=validate_config,
     make_policy_optimizer=make_policy_optimizer,
     before_train_step=add_pure_exploration_phase,
 )
