@@ -3,31 +3,30 @@ import pytest
 import numpy as np
 from ray.rllib.evaluation import RolloutWorker
 
-from mapo.tests.mock_env import MockEnv
-from mapo.agents.mapo.mapo_policy import MAPOTFPolicy
-from mapo.agents.mapo.off_mapo_policy import OffMAPOTFPolicy
 
-
-def get_worker_kwargs():
-    return [
-        dict(
-            env_creator=MockEnv,
-            policy=policy_cls,
-            policy_config={"actor_delay": 3, "critic_delay": 2},
-        )
-        for policy_cls in (MAPOTFPolicy, OffMAPOTFPolicy)
-    ]
+@pytest.fixture
+def policy_config(env_name):
+    return {"actor_delay": 3, "critic_delay": 2, "env": env_name}
 
 
 @pytest.fixture
-def worker_with_targets():
-    return RolloutWorker(**get_worker_kwargs()[1])
+def worker(env_creator, policy_cls, policy_config):
+    return RolloutWorker(
+        env_creator=env_creator, policy=policy_cls, policy_config=policy_config
+    )
 
 
-@pytest.mark.parametrize("worker_kwargs", get_worker_kwargs())
-def test_optimizer_global_step_update(worker_kwargs):
+@pytest.fixture
+def worker_with_targets(env_creator, policy_cls_with_targets, policy_config):
+    return RolloutWorker(
+        env_creator=env_creator,
+        policy=policy_cls_with_targets,
+        policy_config=policy_config,
+    )
+
+
+def test_optimizer_global_step_update(worker):
     # pylint: disable=protected-access
-    worker = RolloutWorker(**worker_kwargs)
     policy = worker.get_policy()
 
     for _ in range(10):
@@ -43,9 +42,7 @@ def test_optimizer_global_step_update(worker_kwargs):
     assert sess.run(policy._optimizer.critic.iterations) == 10 // critic_delay
 
 
-@pytest.mark.parametrize("worker_kwargs", get_worker_kwargs())
-def test_actor_update_frequency(worker_kwargs):
-    worker = RolloutWorker(**worker_kwargs)
+def test_actor_update_frequency(worker):
     policy = worker.get_policy()
 
     def get_actor_vars():
@@ -62,9 +59,7 @@ def test_actor_update_frequency(worker_kwargs):
             assert all_close
 
 
-@pytest.mark.parametrize("worker_kwargs", get_worker_kwargs())
-def test_critic_update_frequency(worker_kwargs):
-    worker = RolloutWorker(**worker_kwargs)
+def test_critic_update_frequency(worker):
     policy = worker.get_policy()
 
     def get_critic_vars():

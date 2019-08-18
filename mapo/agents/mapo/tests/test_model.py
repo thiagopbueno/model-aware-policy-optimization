@@ -15,6 +15,7 @@ from mapo.agents.mapo.mapo_model import MAPOModel
 def get_spaces():
     return (
         Box(-np.inf, np.inf, shape=(2,), dtype=np.float32),
+        # Action range must be limited so as to not break ActionSquashingLayer
         Box(-1.0, 1.0, shape=(2,), dtype=np.float32),
     )
 
