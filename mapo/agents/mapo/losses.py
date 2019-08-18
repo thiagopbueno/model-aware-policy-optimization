@@ -17,11 +17,13 @@ def dynamics_mle_loss(batch_tensors, model):
 
 def dynamics_pga_loss(batch_tensors, model, actor_loss, config):
     """Compute Policy Gradient Aware dynamics loss"""
-    model_based_gradients = tf.gradients(actor_loss, model.actor_variables)
+    gmapo = tf.gradients(actor_loss, model.actor_variables)
+    flat_gmapo = tf.concat([tf.reshape(grad, [-1]) for grad in gmapo], axis=0)
     dpg_loss = actor_dpg_loss(batch_tensors, model)
-    dpg = tf.gradients(dpg_loss, model.dynamics_variables)
+    dpg = tf.gradients(dpg_loss, model.actor_variables)
+    flat_dpg = tf.concat([tf.reshape(grad, [-1]) for grad in dpg], axis=0)
     kernel = config["kernel"]
-    return kernel(model_based_gradients, dpg)
+    return kernel(flat_gmapo, flat_dpg)
 
 
 def _build_critic_targets(batch_tensors, model, config):
@@ -95,8 +97,8 @@ def critic_return_loss(batch_tensors, model):
 def actor_dpg_loss(batch_tensors, model):
     """Compute deterministic policy gradient loss."""
     obs = batch_tensors[SampleBatch.CUR_OBS]
-    policy_action = model.get_actions(obs)
-    policy_action_value = model.get_q_values(obs, policy_action)
+    policy_action = model.compute_actions(obs)
+    policy_action_value = model.compute_q_values(obs, policy_action)
     return -tf.reduce_mean(policy_action_value)
 
 
