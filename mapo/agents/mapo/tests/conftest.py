@@ -2,6 +2,7 @@
 import pytest
 
 from mapo.tests.conftest import env_name, env_creator  # pylint: disable=unused-import
+from mapo.models.tests.conftest import spaces  # pylint: disable=unused-import
 from mapo.agents.mapo.mapo import MAPOTrainer
 from mapo.agents.mapo.off_mapo import OffMAPOTrainer
 
