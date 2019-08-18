@@ -1,14 +1,22 @@
 """Tests regarding delayed policy updates in TD3."""
-# pylint: disable=missing-docstring
+# pylint: disable=missing-docstring, redefined-outer-name
+import pytest
 import numpy as np
 from ray.rllib.evaluation import RolloutWorker
 
-from mapo.tests.mock_env import MockEnv
 from mapo.agents.td3.td3_policy import TD3TFPolicy
 
 
-def test_target_network_initialization():
-    worker = RolloutWorker(MockEnv, TD3TFPolicy, policy_config={"policy_delay": 2})
+@pytest.fixture
+def worker(env_creator, env_name):
+    return RolloutWorker(
+        env_creator=env_creator,
+        policy=TD3TFPolicy,
+        policy_config={"policy_delay": 2, "env": env_name},
+    )
+
+
+def test_target_network_initialization(worker):
     policy = worker.get_policy()
 
     def get_main_target_vars():
@@ -23,9 +31,8 @@ def test_target_network_initialization():
     )
 
 
-def test_optimizer_global_step_update():
+def test_optimizer_global_step_update(worker):
     # pylint: disable=protected-access
-    worker = RolloutWorker(MockEnv, TD3TFPolicy, policy_config={"policy_delay": 2})
     policy = worker.get_policy()
 
     for _ in range(10):
@@ -37,8 +44,7 @@ def test_optimizer_global_step_update():
     assert sess.run(policy._critic_optimizer.iterations) == 10
 
 
-def test_actor_update_frequency():
-    worker = RolloutWorker(MockEnv, TD3TFPolicy, policy_config={"policy_delay": 2})
+def test_actor_update_frequency(worker):
     policy = worker.get_policy()
 
     def get_actor_vars():
@@ -55,8 +61,7 @@ def test_actor_update_frequency():
             assert all_close
 
 
-def test_target_update_frequency():
-    worker = RolloutWorker(MockEnv, TD3TFPolicy, policy_config={"policy_delay": 2})
+def test_target_update_frequency(worker):
     policy = worker.get_policy()
 
     def get_target_vars():
