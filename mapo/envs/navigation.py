@@ -92,13 +92,25 @@ class NavigationEnv(MAPOTFCustomEnv):
         if self._deceleration_zones:
             deceleration = self._deceleration()
 
-        noise = self._sample_noise()
-        next_state = state + (deceleration * action) + noise
-        return next_state
+        position = state + (deceleration * action)
+        dist, next_state = self._sample_noise(position)
+        log_prob = dist.log_prob(tf.stop_gradient(next_state))
+        return next_state, log_prob
+
+    def _transition_log_prob_fn(self, state, action, next_state):
+        deceleration = 1.0
+        if self._deceleration_zones:
+            deceleration = self._deceleration()
+
+        position = state + (deceleration * action)
+        dist, _ = self._sample_noise(position)
+        log_prob = dist.log_prob(tf.stop_gradient(next_state))
+        return log_prob
 
     def _reward_fn(self, state, action, next_state):
+        # pylint: disable=invalid-unary-operand-type
         goal = tf.constant(self._end, name="goal")
-        return -tf.norm(state - goal)  # pylint: disable=invalid-unary-operand-type
+        return -tf.norm(state - goal, axis=-1)
 
     def _terminal(self):
         reached_goal = np.allclose(self._state, self._end, atol=1e-1)
@@ -108,13 +120,13 @@ class NavigationEnv(MAPOTFCustomEnv):
     def _info(self):
         return {}
 
-    def _sample_noise(self):
-        mean = self._noise["mean"]
-        cov = self._noise["cov"]
+    def _sample_noise(self, position):
         tfd = tfp.distributions
+        mean = position + self._noise["mean"]
+        cov = self._noise["cov"]
         dist = tfd.MultivariateNormalFullCovariance(loc=mean, covariance_matrix=cov)
         sample = dist.sample()
-        return sample
+        return dist, sample
 
     def _deceleration(self):
         decay = tf.constant(self._deceleration_decay, name="decay")
