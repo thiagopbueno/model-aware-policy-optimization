@@ -81,7 +81,7 @@ def config(kernel_fn, model_config, twin_q, smooth_target_policy, use_true_dynam
         "model_config": model_config,
         "twin_q": twin_q,
         "use_true_dynamics": use_true_dynamics,
-        "branching_factor": 1,
+        "branching_factor": 4,
         "smooth_target_policy": smooth_target_policy,
         "target_noise": 0.2,
         "target_noise_clip": 0.5,
@@ -128,13 +128,20 @@ def env(env_creator):
     return env_creator()
 
 
+def assert_consistent_shapes_and_grads(loss, variables):
+    assert loss.shape == ()
+    grads = tf.gradients(loss, variables)
+    assert all(grad is not None for grad in grads)
+    assert all(
+        tuple(grad.shape) == tuple(var.shape) for grad, var in zip(grads, variables)
+    )
+
+
 def test_dynamics_mle_loss(batch_tensors, model):
     loss = losses.dynamics_mle_loss(batch_tensors, model)
+    variables = model.dynamics_variables
 
-    assert loss.shape == ()
-    assert all(
-        grad is not None for grad in tf.gradients(loss, model.dynamics_variables)
-    )
+    assert_consistent_shapes_and_grads(loss, variables)
     assert SampleBatch.CUR_OBS in batch_tensors.accessed_keys
     assert SampleBatch.ACTIONS in batch_tensors.accessed_keys
     assert SampleBatch.NEXT_OBS in batch_tensors.accessed_keys
@@ -145,11 +152,9 @@ def test_dynamics_pga_loss(batch_tensors, env, model_and_config):
     actor_loss = losses.actor_model_aware_loss(batch_tensors, model, env, config)
     batch_tensors = UsageTrackingDict(batch_tensors)
     loss = losses.dynamics_pga_loss(batch_tensors, model, actor_loss, config)
+    variables = model.dynamics_variables
 
-    assert loss.shape == ()
-    assert all(
-        grad is not None for grad in tf.gradients(loss, model.dynamics_variables)
-    )
+    assert_consistent_shapes_and_grads(loss, variables)
     assert SampleBatch.CUR_OBS in batch_tensors.accessed_keys
 
 
@@ -170,9 +175,9 @@ def test_build_critic_targets(batch_tensors, model_and_config_with_targets):
 def test_critic_1step_loss(batch_tensors, model_and_config_with_targets):
     model, config = model_and_config_with_targets
     loss, _ = losses.critic_1step_loss(batch_tensors, model, config)
+    variables = model.critic_variables
 
-    assert loss.shape == ()
-    assert all(grad is not None for grad in tf.gradients(loss, model.critic_variables))
+    assert_consistent_shapes_and_grads(loss, variables)
     assert SampleBatch.CUR_OBS in batch_tensors.accessed_keys
     assert SampleBatch.ACTIONS in batch_tensors.accessed_keys
 
@@ -180,12 +185,11 @@ def test_critic_1step_loss(batch_tensors, model_and_config_with_targets):
 def test_critic_return_loss(batch_tensors, model):
     loss = losses.critic_return_loss(batch_tensors, model)
 
-    critic_variables = model.critic_variables
+    variables = model.critic_variables
     if model.twin_q:
-        critic_variables = critic_variables[: len(critic_variables) // 2]
+        variables = variables[: len(variables) // 2]
 
-    assert loss.shape == ()
-    assert all(grad is not None for grad in tf.gradients(loss, critic_variables))
+    assert_consistent_shapes_and_grads(loss, variables)
     assert SampleBatch.CUR_OBS in batch_tensors.accessed_keys
     assert SampleBatch.ACTIONS in batch_tensors.accessed_keys
     assert Postprocessing.ADVANTAGES in batch_tensors.accessed_keys
@@ -193,16 +197,16 @@ def test_critic_return_loss(batch_tensors, model):
 
 def test_actor_dpg_loss(batch_tensors, model):
     loss = losses.actor_dpg_loss(batch_tensors, model)
+    variables = model.actor_variables
 
-    assert loss.shape == ()
-    assert all(grad is not None for grad in tf.gradients(loss, model.actor_variables))
+    assert_consistent_shapes_and_grads(loss, variables)
     assert SampleBatch.CUR_OBS in batch_tensors.accessed_keys
 
 
 def test_actor_model_aware_loss(batch_tensors, env, model_and_config):
     model, config = model_and_config
     loss = losses.actor_model_aware_loss(batch_tensors, model, env, config)
+    variables = model.actor_variables
 
-    assert loss.shape == ()
-    assert all(grad is not None for grad in tf.gradients(loss, model.actor_variables))
+    assert_consistent_shapes_and_grads(loss, variables)
     assert SampleBatch.CUR_OBS in batch_tensors.accessed_keys
