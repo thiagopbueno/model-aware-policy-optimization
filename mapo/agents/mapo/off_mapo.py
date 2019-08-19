@@ -78,8 +78,6 @@ DEFAULT_CONFIG = merge_dicts(
         "evaluation_config": {"evaluate": True},
         # Turn of exploration noise when evaluating the policy
         "evaluate": False,
-        # === Experiments ===
-        "use_true_dynamics": False,
     },
 )
 

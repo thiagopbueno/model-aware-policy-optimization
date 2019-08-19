@@ -18,12 +18,10 @@ def dynamics_mle_loss(batch_tensors, model):
 def dynamics_pga_loss(batch_tensors, model, actor_loss, config):
     """Compute Policy Gradient Aware dynamics loss"""
     gmapo = tf.gradients(actor_loss, model.actor_variables)
-    flat_gmapo = tf.concat([tf.reshape(grad, [-1]) for grad in gmapo], axis=0)
     dpg_loss = actor_dpg_loss(batch_tensors, model)
     dpg = tf.gradients(dpg_loss, model.actor_variables)
-    flat_dpg = tf.concat([tf.reshape(grad, [-1]) for grad in dpg], axis=0)
     kernel = config["kernel"]
-    return kernel(flat_gmapo, flat_dpg)
+    return kernel(gmapo, dpg)
 
 
 def _build_critic_targets(batch_tensors, model, config):
