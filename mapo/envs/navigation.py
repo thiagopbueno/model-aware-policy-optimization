@@ -5,6 +5,8 @@ import gym
 import tensorflow as tf
 import tensorflow_probability as tfp
 
+from mapo.envs import MAPOTFCustomEnv
+
 
 DEFAULT_CONFIG = {
     "start": [-10.0, -10.0],
@@ -17,7 +19,7 @@ DEFAULT_CONFIG = {
 }
 
 
-class NavigationEnv(gym.Env):
+class NavigationEnv(MAPOTFCustomEnv):
     """NavigationEnv implements a gym environment for the Navigation
     domain.
 
@@ -39,6 +41,7 @@ class NavigationEnv(gym.Env):
     metadata = {"render.modes": ["human"]}
 
     def __init__(self, **kwargs):
+
         self._config = {**DEFAULT_CONFIG, **kwargs}
 
         self._start = np.array(self._config["start"], dtype=np.float32)
@@ -49,6 +52,13 @@ class NavigationEnv(gym.Env):
         )
         self._action_upper_bound = np.array(
             self._config["action_upper_bound"], dtype=np.float32
+        )
+
+        self.observation_space = gym.spaces.Box(
+            low=-np.inf, high=np.inf, shape=(2,), dtype=np.float32
+        )
+        self.action_space = gym.spaces.Box(
+            low=self._action_lower_bound, high=self._action_upper_bound
         )
 
         self._deceleration_zones = self._config["deceleration_zones"]
@@ -64,67 +74,18 @@ class NavigationEnv(gym.Env):
 
         self._horizon = self._config["horizon"]
 
-        self.observation_space = gym.spaces.Box(
-            low=-np.inf, high=np.inf, shape=(2,), dtype=np.float32
-        )
-        self.action_space = gym.spaces.Box(
-            low=self._action_lower_bound, high=self._action_upper_bound
-        )
-
-        self._state = None
-        self._timestep = None
-
-        self._graph = tf.Graph()
-        with self._graph.as_default():  # pylint: disable=not-context-manager
-            self._state_placeholder = tf.placeholder(
-                tf.float32, shape=self._start.shape
-            )
-            self._action_placeholder = tf.placeholder(
-                tf.float32, shape=self._start.shape
-            )
-            self._transition_tensor = self._transition_fn(
-                self._state_placeholder, self._action_placeholder
-            )
-            self._reward_tensor = self._reward_fn(self._state_placeholder)
-
-        self._sess = tf.Session(graph=self._graph)
-
-    def step(self, action):
-        next_state = self._transition(self._state, action)
-        reward = self._reward(self._state)
-        done = self._terminal()
-        info = {}
-        self._state = next_state
-        self._timestep += 1
-        return self.obs, reward, done, info
-
-    def reset(self):
-        self._state = self._start.copy()
-        self._timestep = 0
-        return self.obs
+        super(NavigationEnv, self).__init__(state_shape=(2,), action_shape=(2,))
 
     def render(self, mode="human"):
         pass
 
-    def close(self):
-        pass
+    @property
+    def start_state(self):
+        return self._start
 
     @property
     def obs(self):
         return self._state
-
-    def _terminal(self):
-        reached_goal = np.allclose(self._state, self._end, atol=1e-1)
-        timeout = self._timestep > self._horizon
-        return reached_goal or timeout
-
-    def _transition(self, state, action):
-        feed_dict = {self._state_placeholder: state, self._action_placeholder: action}
-        return self._sess.run(self._transition_tensor, feed_dict=feed_dict)
-
-    def _reward(self, state):
-        feed_dict = {self._state_placeholder: state}
-        return self._sess.run(self._reward_tensor, feed_dict=feed_dict)
 
     def _transition_fn(self, state, action):
         deceleration = 1.0
@@ -135,9 +96,17 @@ class NavigationEnv(gym.Env):
         next_state = state + (deceleration * action) + noise
         return next_state
 
-    def _reward_fn(self, state):
+    def _reward_fn(self, state, action, next_state):
         goal = tf.constant(self._end, name="goal")
         return -tf.norm(state - goal)  # pylint: disable=invalid-unary-operand-type
+
+    def _terminal(self):
+        reached_goal = np.allclose(self._state, self._end, atol=1e-1)
+        timeout = self._timestep > self._horizon
+        return reached_goal or timeout
+
+    def _info(self):
+        return {}
 
     def _sample_noise(self):
         mean = self._noise["mean"]
