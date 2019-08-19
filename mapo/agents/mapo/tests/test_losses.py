@@ -9,6 +9,7 @@ from ray.rllib.utils.tracking_dict import UsageTrackingDict
 
 import mapo.agents.mapo.losses as losses
 from mapo.agents.mapo import MAPOModel
+from mapo.agents.mapo.mapo import grad_diff_norm
 
 
 @pytest.fixture
@@ -62,31 +63,20 @@ def twin_q(request):
     return request.param
 
 
-@pytest.fixture
-def kernel_fn():
-    def kernel(gmapo, dpg):
-        flat_gmapo = tf.concat([tf.reshape(grad, [-1]) for grad in gmapo], axis=0)
-        flat_dpg = tf.concat([tf.reshape(grad, [-1]) for grad in dpg], axis=0)
-        return tf.norm(flat_gmapo - flat_dpg, axis=0)
-
-    return kernel
-
-
-# skip true dynamics test until env dynamics log_prob is done
-@pytest.fixture(params=[False, pytest.param(True, marks=pytest.mark.skip)])
+@pytest.fixture(params=[False, True])
 def use_true_dynamics(request):
     return request.param
 
 
 @pytest.fixture
-def config(kernel_fn, model_config, twin_q, smooth_target_policy, use_true_dynamics):
+def config(model_config, twin_q, smooth_target_policy):
     return {
         "gamma": 0.99,
-        "kernel": kernel_fn,
+        "kernel": grad_diff_norm,
         "model_config": model_config,
         "twin_q": twin_q,
-        "use_true_dynamics": use_true_dynamics,
         "branching_factor": 4,
+        "use_true_dynamics": False,
         "smooth_target_policy": smooth_target_policy,
         "target_noise": 0.2,
         "target_noise_clip": 0.5,
@@ -208,8 +198,11 @@ def test_actor_dpg_loss(batch_tensors, model):
     assert SampleBatch.CUR_OBS in batch_tensors.accessed_keys
 
 
-def test_actor_model_aware_loss(batch_tensors, env, model_and_config):
+def test_actor_model_aware_loss(
+    batch_tensors, env, model_and_config, use_true_dynamics
+):
     model, config = model_and_config
+    config["use_true_dynamics"] = use_true_dynamics
     loss = losses.actor_model_aware_loss(batch_tensors, model, env, config)
     variables = model.actor_variables
 
