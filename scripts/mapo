@@ -160,6 +160,13 @@ def parse_args():
         "(default=1).",
     )
     exp_args_group.add_argument("--name", type=str, help="The name of the experiment.")
+    exp_args_group.add_argument(
+        "--use-true-dynamics",
+        action="store_true",
+        default=False,
+        help="Flag to use the true dyamics log prob in the gradient estimator "
+        "(default=False)",
+    )
 
     return parser.parse_args()
 
@@ -207,6 +214,7 @@ def run(args):
             "actor_lr": args.actor_lr,
             "critic_lr": args.critic_lr,
             "dynamics_lr": args.dynamics_lr,
+            "use_true_dynamics": args.use_true_dynamics,
         },
         num_samples=args.num_samples,
     )
