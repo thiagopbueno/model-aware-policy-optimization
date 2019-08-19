@@ -54,7 +54,7 @@ class MAPOTFCustomEnv(gym.Env):
             )
 
     def step(self, action):
-        next_state = self._transition(self._state, action)
+        next_state, _ = self._transition(self._state, action)
         reward = self._reward(self._state, action, next_state)
         done = self._terminal()
         info = self._info()
@@ -80,6 +80,10 @@ class MAPOTFCustomEnv(gym.Env):
 
     @abc.abstractmethod
     def _transition_fn(self, state, action):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def _transition_log_prob_fn(self, state, action, next_state):
         raise NotImplementedError
 
     @abc.abstractmethod
