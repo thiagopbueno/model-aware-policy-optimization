@@ -99,7 +99,7 @@ def parse_args():
         help="The learning rate for the dynamics optimizer (defaul=1e-3).",
     )
     optimizers_args_group.add_argument(
-        "--policy-delay",
+        "--actor-delay",
         type=int,
         default=2,
         help="The number of traing steps before updating the policy " "(default=2).",
@@ -209,7 +209,7 @@ def run(args):
             "num_workers": args.num_workers,
             "sample_batch_size": args.sample_batch_size,
             "train_batch_size": args.train_batch_size,
-            "policy_delay": args.policy_delay,
+            "actor_delay": args.actor_delay,
             "critic_delay": args.critic_delay,
             "actor_lr": args.actor_lr,
             "critic_lr": args.critic_lr,
