@@ -14,17 +14,6 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 DEFAULT_CONFIG = merge_dicts(
     BASE_CONFIG,
     {
-        # === MAPO ===
-        # How many samples to draw from the dynamics model
-        "branching_factor": 1,
-        # Whether to use the env's dynamics to calculate the actor loss
-        "use_true_dynamics": False,
-        # Which model-learning optimization to use
-        # Valid values: "mle" (Maximum Likelihood Estimation),
-        # "pga" (DPG-aware loss function),
-        "model_loss": "mle",
-        # Which kernel metric to compare gradients in dynamics loss
-        "kernel": "l2",
         # === Model ===
         # twin Q-net
         "twin_q": True,
@@ -57,8 +46,6 @@ DEFAULT_CONFIG = merge_dicts(
         "target_noise": 0.2,
         # target noise limit (bound)
         "target_noise_clip": 0.5,
-        # delayed policy update
-        "policy_delay": 2,
         # How many environment steps to take before learning starts.
         "learning_starts": 0,
         # === Replay buffer ===
@@ -89,8 +76,6 @@ DEFAULT_CONFIG = merge_dicts(
         "evaluation_config": {"evaluate": True},
         # Turn of exploration noise when evaluating the policy
         "evaluate": False,
-        # === Experiments ===
-        "use_true_dynamics": False,
     },
 )
 
