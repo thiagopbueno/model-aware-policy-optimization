@@ -27,12 +27,12 @@ def get_gym_envs():
 
 
 def sample_env_states(env, batch_size):
-    state = np.stack(env.observation_space.sample() for _ in range(batch_size))
+    state = np.stack([env.observation_space.sample() for _ in range(batch_size)])
     return state
 
 
 def sample_env_actions(env, batch_size):
-    action = np.stack(env.action_space.sample() for _ in range(batch_size))
+    action = np.stack([env.action_space.sample() for _ in range(batch_size)])
     return action
 
 
