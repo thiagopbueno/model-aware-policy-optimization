@@ -51,6 +51,8 @@ DEFAULT_CONFIG = with_common_config(
         # === Resources ===
         # Number of actors used for parallelism
         "num_workers": 0,
+        # === Experiments ===
+        "use_true_dynamics": False,
     }
 )
 
