@@ -1,10 +1,9 @@
 """Collection of kernels for comparing gradient vectors."""
 
+# pylint: disable=invalid-name
+
 import numpy as np
 import tensorflow as tf
-
-
-# pylint: disable=invalid-name
 
 
 def _flat_and_concat(u):
@@ -66,3 +65,12 @@ def dot_product_kernel(u, v, flat=False):
 def cos_kernel(u, v, flat=False):
     """Returns cosine similarity between `u` and `v` tensors."""
     return _similarity_kernel(u, v, flat, unit_vectors=True)
+
+
+KERNELS = {
+    "l1": l1_kernel,
+    "l2": l2_kernel,
+    "linf": linf_kernel,
+    "dot-product": dot_product_kernel,
+    "cos-similarity": cos_kernel,
+}

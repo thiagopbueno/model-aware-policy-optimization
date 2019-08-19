@@ -4,6 +4,8 @@ from tensorflow import keras
 from ray.rllib.policy.sample_batch import SampleBatch
 from ray.rllib.evaluation.postprocessing import Postprocessing
 
+from mapo.kernels import KERNELS
+
 
 def dynamics_mle_loss(batch_tensors, model):
     """Compute dynamics loss via Maximum Likelihood Estimation."""
@@ -20,7 +22,7 @@ def dynamics_pga_loss(batch_tensors, model, actor_loss, config):
     gmapo = tf.gradients(actor_loss, model.actor_variables)
     dpg_loss = actor_dpg_loss(batch_tensors, model)
     dpg = tf.gradients(dpg_loss, model.actor_variables)
-    kernel = config["kernel"]
+    kernel = KERNELS[config["kernel"]]
     return kernel(gmapo, dpg)
 
 

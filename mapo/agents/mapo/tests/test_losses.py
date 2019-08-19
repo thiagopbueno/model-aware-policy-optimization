@@ -9,7 +9,6 @@ from ray.rllib.utils.tracking_dict import UsageTrackingDict
 
 import mapo.agents.mapo.losses as losses
 from mapo.agents.mapo import MAPOModel
-from mapo.agents.mapo.mapo import grad_diff_norm
 
 
 @pytest.fixture
@@ -72,7 +71,7 @@ def use_true_dynamics(request):
 def config(model_config, twin_q, smooth_target_policy):
     return {
         "gamma": 0.99,
-        "kernel": grad_diff_norm,
+        "kernel": "l2",
         "model_config": model_config,
         "twin_q": twin_q,
         "branching_factor": 4,

@@ -61,7 +61,16 @@ def parse_args():
         "(default=2)",
     )
 
-    model_args_group = parser.add_argument_group(">> Model")
+    mapo_args_group = parser.add_argument_group(">> MAPO")
+    mapo_args_group.add_argument(
+        "--kernel",
+        type=str,
+        choice=["l1", "l2", "linf", "dot-product", "cos-similarity"],
+        default="l2",
+        help="Kernel metric to compare gradients in MAPO.",
+    )
+
+    model_args_group = parser.add_argument_group(">> Models")
     model_args_group.add_argument(
         "--config-actor-net",
         type=read_config_json,
