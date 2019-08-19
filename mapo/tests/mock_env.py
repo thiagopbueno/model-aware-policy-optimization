@@ -47,22 +47,26 @@ class MockEnv(MAPOTFCustomEnv):  # pylint: disable=abstract-method
         return self._state
 
     def _transition_fn(self, state, action):  # pylint: disable=unused-argument
-        dist = self._next_state_dist()
-        next_state = dist.sample()
-        log_prob = dist.log_prob(tf.stop_gradient(next_state))
+        dist = self._next_state_dist(state, action)
+        sample_shape = tf.shape(action)[:-1]
+        next_state = dist.sample(sample_shape=sample_shape)
+        log_prob = tf.reduce_sum(dist.log_prob(tf.stop_gradient(next_state)), axis=-1)
         return next_state, log_prob
 
     def _transition_log_prob_fn(self, state, action, next_state):
         # pylint: disable=unused-argument
-        dist = self._next_state_dist()
-        return dist.log_prob(tf.stop_gradient(next_state))
+        dist = self._next_state_dist(state, action)
+        return tf.reduce_sum(dist.log_prob(tf.stop_gradient(next_state)), axis=-1)
 
     def _reward_fn(self, state, action, next_state):  # pylint: disable=unused-argument
         return tf.ones(tf.shape(next_state)[:-1])
 
-    def _next_state_dist(self):
-        return tfp.distributions.Uniform(
-            low=self.observation_space.low, high=self.observation_space.high
+    def _next_state_dist(self, state, action):  # pylint: disable=unused-argument
+        return tfp.distributions.TruncatedNormal(
+            loc=tf.ones(self.observation_space.shape) * tf.norm(action, axis=-1),
+            scale=1.0,
+            low=self.observation_space.low,
+            high=self.observation_space.high,
         )
 
     def _terminal(self):

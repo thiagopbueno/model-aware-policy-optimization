@@ -17,7 +17,7 @@ def grad_diff_norm(gmapo, dpg):
     """Compute the euclidean norm between the flattened gradients."""
     flat_gmapo = tf.concat([tf.reshape(grad, [-1]) for grad in gmapo], axis=0)
     flat_dpg = tf.concat([tf.reshape(grad, [-1]) for grad in dpg], axis=0)
-    return tf.norm(flat_gmapo - flat_dpg, axis=0)
+    return tf.norm(flat_gmapo - flat_dpg)
 
 
 DEFAULT_CONFIG = with_common_config(
