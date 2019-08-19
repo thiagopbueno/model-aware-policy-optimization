@@ -64,7 +64,12 @@ def twin_q(request):
 
 @pytest.fixture
 def kernel_fn():
-    return lambda x, y: tf.norm(x - y, axis=0)
+    def kernel(gmapo, dpg):
+        flat_gmapo = tf.concat([tf.reshape(grad, [-1]) for grad in gmapo], axis=0)
+        flat_dpg = tf.concat([tf.reshape(grad, [-1]) for grad in dpg], axis=0)
+        return tf.norm(flat_gmapo - flat_dpg, axis=0)
+
+    return kernel
 
 
 # skip true dynamics test until env dynamics log_prob is done

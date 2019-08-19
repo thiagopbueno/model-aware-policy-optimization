@@ -2,6 +2,8 @@
 
 import logging
 
+import tensorflow as tf
+from ray.tune import function
 from ray.rllib.agents.trainer import with_common_config
 from ray.rllib.agents.trainer_template import build_trainer
 from ray.rllib.models import MODEL_DEFAULTS
@@ -9,6 +11,14 @@ from ray.rllib.utils import merge_dicts
 from mapo.agents.mapo.mapo_policy import MAPOTFPolicy
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+
+def grad_diff_norm(gmapo, dpg):
+    """Compute the euclidean norm between the flattened gradients."""
+    flat_gmapo = tf.concat([tf.reshape(grad, [-1]) for grad in gmapo], axis=0)
+    flat_dpg = tf.concat([tf.reshape(grad, [-1]) for grad in dpg], axis=0)
+    return tf.norm(flat_gmapo - flat_dpg, axis=0)
+
 
 DEFAULT_CONFIG = with_common_config(
     {
@@ -21,6 +31,8 @@ DEFAULT_CONFIG = with_common_config(
         # Valid values: "mle" (Maximum Likelihood Estimation),
         # "pga" (DPG-aware loss function),
         "model_loss": "mle",
+        # Kernel to use between the model-aware gradient and dpg
+        "kernel": function(grad_diff_norm),
         # === Model ===
         # actor and critic network configuration
         "model": merge_dicts(
@@ -48,8 +60,6 @@ DEFAULT_CONFIG = with_common_config(
         # === Resources ===
         # Number of actors used for parallelism
         "num_workers": 0,
-        # === Experiments ===
-        "use_true_dynamics": False,
     }
 )
 
