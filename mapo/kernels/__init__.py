@@ -1,7 +1,5 @@
 """Collection of kernels for comparing gradient vectors."""
-
 # pylint: disable=invalid-name
-
 import numpy as np
 import tensorflow as tf
 
