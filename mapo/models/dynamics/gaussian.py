@@ -6,6 +6,7 @@ from tensorflow.keras.layers import Dense
 import tensorflow_probability as tfp
 
 from ray.rllib.utils.annotations import override
+from ray.rllib.models.tf.misc import normc_initializer
 
 
 class GaussianDynamicsModel(keras.Model):
@@ -36,10 +37,20 @@ class GaussianDynamicsModel(keras.Model):
         self.hidden_layers = []
         activation = self.config.get("activation", "relu")
         for units in self.config["layers"]:
-            self.hidden_layers.append(Dense(units, activation=activation))
+            self.hidden_layers.append(
+                Dense(
+                    units,
+                    activation=activation,
+                    kernel_initializer=normc_initializer(1.0),
+                )
+            )
 
-        self.mean_output_layer = Dense(self.obs_space.shape[0])
-        self.log_stddev_output_layer = Dense(self.obs_space.shape[0])
+        self.mean_output_layer = Dense(
+            self.obs_space.shape[0], kernel_initializer=normc_initializer(0.01)
+        )
+        self.log_stddev_output_layer = Dense(
+            self.obs_space.shape[0], kernel_initializer=normc_initializer(0.01)
+        )
 
     @override(keras.models.Model)
     def call(self, inputs, training=None, mask=None):
