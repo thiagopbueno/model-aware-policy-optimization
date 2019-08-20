@@ -23,7 +23,9 @@ def build_mapo_losses(policy, batch_tensors):
     model, config = policy.model, policy.config
     env = _global_registry.get(ENV_CREATOR, config["env"])(config["env_config"])
     actor_loss = losses.actor_model_aware_loss(batch_tensors, model, env, config)
-    if config["model_loss"] == "pga":
+    if config["use_true_dynamics"]:
+        dynamics_loss = 0
+    elif config["model_loss"] == "pga":
         dynamics_loss = losses.dynamics_pga_loss(
             batch_tensors, model, actor_loss, config
         )
@@ -63,7 +65,10 @@ def create_separate_optimizers(policy, config):
     # pylint: disable=unused-argument
     actor_optimizer = keras.optimizers.Adam(learning_rate=config["actor_lr"])
     critic_optimizer = keras.optimizers.Adam(learning_rate=config["critic_lr"])
-    dynamics_optimizer = keras.optimizers.Adam(learning_rate=config["dynamics_lr"])
+    if config["use_true_dynamics"]:
+        dynamics_optimizer = None
+    else:
+        dynamics_optimizer = keras.optimizers.Adam(learning_rate=config["dynamics_lr"])
     policy.global_step = tf.Variable(0, trainable=False)
     return AgentComponents(
         dynamics=dynamics_optimizer, critic=critic_optimizer, actor=actor_optimizer
@@ -73,23 +78,29 @@ def create_separate_optimizers(policy, config):
 def compute_separate_gradients(policy, optimizer, loss):
     """Create compute gradients ops using separate optimizers."""
     # pylint: disable=unused-argument
+    config = policy.config
     dynamics_loss, critic_loss, actor_loss = (
         policy.mapo_losses.dynamics,
         policy.mapo_losses.critic,
         policy.mapo_losses.actor,
     )
-    dynamics_variables = policy.model.dynamics_variables
-    critic_variables = policy.model.critic_variables
-    actor_variables = policy.model.actor_variables
 
-    dynamics_grads = optimizer.dynamics.get_gradients(dynamics_loss, dynamics_variables)
-    critic_grads = optimizer.critic.get_gradients(critic_loss, critic_variables)
-    actor_grads = optimizer.actor.get_gradients(actor_loss, actor_variables)
-    dynamics_grads_and_vars = list(zip(dynamics_grads, dynamics_variables))
-    critic_grads_and_vars = list(zip(critic_grads, critic_variables))
-    actor_grads_and_vars = list(zip(actor_grads, actor_variables))
+    def grads_and_vars(loss, optim, variables):
+        return list(zip(optim.get_gradients(loss, variables), variables))
+
+    if not config["use_true_dynamics"]:
+        dynamics_grads_and_vars = grads_and_vars(
+            dynamics_loss, optimizer.dynamics, policy.model.dynamics_variables
+        )
+    critic_grads_and_vars = grads_and_vars(
+        critic_loss, optimizer.critic, policy.model.critic_variables
+    )
+    actor_grads_and_vars = grads_and_vars(
+        actor_loss, optimizer.actor, policy.model.actor_variables
+    )
+
     policy.all_grads_and_vars = AgentComponents(
-        dynamics=dynamics_grads_and_vars,
+        dynamics=None if config["use_true_dynamics"] else dynamics_grads_and_vars,
         critic=critic_grads_and_vars,
         actor=actor_grads_and_vars,
     )
@@ -111,7 +122,10 @@ def apply_gradients_with_delays(policy, optimizer, grads_and_vars):
     )
     with tf.control_dependencies([policy.global_step.assign_add(1)]):
         # Dynamics updates
-        dynamics_op = optimizer.dynamics.apply_gradients(dynamics_grads_and_vars)
+        if policy.config["use_true_dynamics"]:
+            dynamics_op = tf.no_op()
+        else:
+            dynamics_op = optimizer.dynamics.apply_gradients(dynamics_grads_and_vars)
         # Critic updates
         should_apply_critic_opt = tf.equal(
             tf.math.mod(policy.global_step, policy.config["critic_delay"]), 0
@@ -136,7 +150,7 @@ def apply_gradients_with_delays(policy, optimizer, grads_and_vars):
             actor_op = tf.cond(
                 should_apply_actor_opt, true_fn=make_actor_apply_op, false_fn=tf.no_op
             )
-        return tf.group(actor_op, critic_op)
+        return tf.group(dynamics_op, critic_op, actor_op)
 
 
 def build_mapo_network(policy, obs_space, action_space, config):
@@ -159,6 +173,7 @@ def build_mapo_network(policy, obs_space, action_space, config):
         model_config=config["model"],
         framework="tf",
         name="mapo_model",
+        create_dynamics=not config["use_true_dynamics"],
     )
 
 

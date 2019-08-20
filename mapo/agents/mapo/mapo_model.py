@@ -28,6 +28,7 @@ class MAPOModel(TFModelV2):  # pylint: disable=abstract-method
         num_outputs,
         model_config,
         name,
+        create_dynamics=True,
         target_networks=False,
         twin_q=False,
     ):
@@ -49,11 +50,13 @@ class MAPOModel(TFModelV2):  # pylint: disable=abstract-method
                 obs_space, action_space, model_config["custom_options"]["critic"]
             )
 
-        models["dynamics"] = GaussianDynamicsModel(
-            obs_space, action_space, **model_config["custom_options"]["dynamics"]
-        )
-        # Hack to create dynamics variables on initialization
-        models["dynamics"]([obs_input(obs_space), action_input(action_space)])
+        if create_dynamics:
+            models["dynamics"] = GaussianDynamicsModel(
+                obs_space, action_space, **model_config["custom_options"]["dynamics"]
+            )
+            # Hack to create dynamics variables on initialization
+            models["dynamics"]([obs_input(obs_space), action_input(action_space)])
+
         self.models = models
         self.register_variables(
             [variable for model in models.values() for variable in model.variables]
