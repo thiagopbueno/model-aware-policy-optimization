@@ -1,0 +1,6 @@
+{
+  "activation": "relu",
+  "layers": [
+    1024
+  ]
+}
