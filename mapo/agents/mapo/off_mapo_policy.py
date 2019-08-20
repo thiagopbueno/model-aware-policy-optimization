@@ -14,6 +14,7 @@ from mapo.agents.mapo.mapo_policy import (
     extra_loss_fetches,
     create_separate_optimizers,
     compute_separate_gradients,
+    apply_gradients_with_delays,
 )
 
 
@@ -66,7 +67,7 @@ def ignore_timeout_termination(
     return sample_batch
 
 
-def apply_gradients_with_delays(policy, optimizer, grads_and_vars):
+def apply_gradients_and_update_targets(policy, optimizer, grads_and_vars):
     """
     Update actor and critic models with different frequencies.
 
@@ -74,49 +75,17 @@ def apply_gradients_with_delays(policy, optimizer, grads_and_vars):
     `actor_delay` time(s). Also use `actor_delay` for target networks update.
     """
     # pylint: disable=unused-argument
-    dynamics_grads_and_vars, critic_grads_and_vars, actor_grads_and_vars = (
-        policy.all_grads_and_vars.dynamics,
-        policy.all_grads_and_vars.critic,
-        policy.all_grads_and_vars.actor,
-    )
-    with tf.control_dependencies([policy.global_step.assign_add(1)]):
-        # Dynamics updates
-        if policy.config["use_true_dynamics"]:
-            dynamics_op = tf.no_op()
-        else:
-            dynamics_op = optimizer.dynamics.apply_gradients(dynamics_grads_and_vars)
-        # Critic updates
-        should_apply_critic_opt = tf.equal(
-            tf.math.mod(policy.global_step, policy.config["critic_delay"]), 0
-        )
-
-        def make_critic_apply_op():
-            return optimizer.critic.apply_gradients(critic_grads_and_vars)
-
-        with tf.control_dependencies([dynamics_op]):
-            critic_op = tf.cond(
-                should_apply_critic_opt, true_fn=make_critic_apply_op, false_fn=tf.no_op
-            )
-        # Actor updates
-        should_apply_actor_opt = tf.equal(
+    apply_ops = apply_gradients_with_delays(policy, optimizer, grads_and_vars)
+    with tf.control_dependencies([apply_ops]):
+        should_update_targets = tf.equal(
             tf.math.mod(policy.global_step, policy.config["actor_delay"]), 0
         )
-
-        def make_actor_apply_op():
-            return optimizer.actor.apply_gradients(actor_grads_and_vars)
-
-        with tf.control_dependencies([critic_op]):
-            actor_op = tf.cond(
-                should_apply_actor_opt, true_fn=make_actor_apply_op, false_fn=tf.no_op
-            )
-        apply_ops = tf.group(dynamics_op, critic_op, actor_op)
-        with tf.control_dependencies([apply_ops]):
-            update_targets_op = tf.cond(
-                should_apply_actor_opt,
-                true_fn=policy.build_update_targets_op,
-                false_fn=tf.no_op,
-            )
-        return tf.group(apply_ops, update_targets_op)
+        update_targets_op = tf.cond(
+            should_update_targets,
+            true_fn=policy.build_update_targets_op,
+            false_fn=tf.no_op,
+        )
+    return tf.group(apply_ops, update_targets_op)
 
 
 def extra_action_feed_fn(policy):
@@ -275,7 +244,7 @@ OffMAPOTFPolicy = build_tf_policy(
     stats_fn=extra_loss_fetches,
     optimizer_fn=create_separate_optimizers,
     gradients_fn=compute_separate_gradients,
-    apply_gradients_fn=apply_gradients_with_delays,
+    apply_gradients_fn=apply_gradients_and_update_targets,
     extra_action_feed_fn=extra_action_feed_fn,
     before_init=setup_early_mixins,
     after_init=copy_targets,
