@@ -22,7 +22,9 @@ def build_mapo_losses(policy, batch_tensors):
     model, config = policy.model, policy.config
     env = _global_registry.get(ENV_CREATOR, config["env"])(config["env_config"])
     actor_loss = losses.actor_model_aware_loss(batch_tensors, model, env, config)
-    if config["model_loss"] == "pga":
+    if config["use_true_dynamics"]:
+        dynamics_loss = 0
+    elif config["model_loss"] == "pga":
         dynamics_loss = losses.dynamics_pga_loss(
             batch_tensors, model, actor_loss, config
         )
@@ -79,7 +81,10 @@ def apply_gradients_with_delays(policy, optimizer, grads_and_vars):
     )
     with tf.control_dependencies([policy.global_step.assign_add(1)]):
         # Dynamics updates
-        dynamics_op = optimizer.dynamics.apply_gradients(dynamics_grads_and_vars)
+        if policy.config["use_true_dynamics"]:
+            dynamics_op = tf.no_op()
+        else:
+            dynamics_op = optimizer.dynamics.apply_gradients(dynamics_grads_and_vars)
         # Critic updates
         should_apply_critic_opt = tf.equal(
             tf.math.mod(policy.global_step, policy.config["critic_delay"]), 0
@@ -227,6 +232,7 @@ def build_mapo_network(policy, obs_space, action_space, config):
         model_config=config["model"],
         framework="tf",
         name="mapo_model",
+        create_dynamics=not config["use_true_dynamics"],
         target_networks=True,
         twin_q=config["twin_q"],
     )
