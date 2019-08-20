@@ -241,6 +241,9 @@ def make_config(args):
     elif args.run == "OurTD3":
         models_config["model"]["custom_model"] = "td3_model"
 
+    # === Preprocessing ===
+    preprocessing_config = {"observation_filter": "NoFilter"}
+
     # === Optimization ===
     optimization_config = {
         "optimizer": {"num_sgd_iter": args.num_sgd_iter},
@@ -268,6 +271,7 @@ def make_config(args):
 
     return {
         **env_config,
+        **preprocessing_config,
         **mapo_config,
         **models_config,
         **optimization_config,
