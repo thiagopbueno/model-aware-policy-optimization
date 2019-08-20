@@ -21,27 +21,16 @@ def read_config_json(filepath):
 def parse_args():
     """Parse command-line arguments."""
     description = "Model-Aware Policy Optimization ({})".format(__version__)
-    usage = (
-        "%(prog)s --run {MAPO,OffMAPO} [--model-learning {MLE,PGA}]"
-        " --env ENV [ENV ...] [CONFIG-OPTIONS]"
-    )
+    usage = "%(prog)s --run {MAPO,OffMAPO} --env ENV [ENV ...] [CONFIG-OPTIONS]"
 
     parser = argparse.ArgumentParser(usage=usage, description=description)
 
     parser.add_argument(
         "--run",
         type=str,
-        choices=["MAPO", "OffMAPO"],
+        choices=["MAPO", "OffMAPO", "OurTD3"],
         required=True,
         help="The algorithm or model to train.",
-    )
-    parser.add_argument(
-        "--model-learning",
-        type=str,
-        choices=["mle", "pg-aware"],
-        default="pg-aware",
-        help="The loss function used for learning the dynamics model. "
-        "(default=pg-aware)",
     )
     parser.add_argument(
         "--env",
@@ -69,6 +58,26 @@ def parse_args():
         default="l2",
         help="Kernel metric to compare gradients in MAPO.",
     )
+    mapo_args_group.add_argument(
+        "--use-true-dynamics",
+        action="store_true",
+        default=False,
+        help="Flag to use the true dyamics log prob in the gradient estimator "
+        "(default=False)",
+    )
+    mapo_args_group.add_argument(
+        "--branching-factor",
+        type=int,
+        default=32,
+        help="The number of virtual samples used in MAPO gradient.",
+    )
+    mapo_args_group.add_argument(
+        "--model-loss",
+        type=str,
+        choices=["mle", "pga"],
+        default="pga",
+        help="The loss function used for learning the dynamics model. " "(default=pga)",
+    )
 
     model_args_group = parser.add_argument_group(">> Models")
     model_args_group.add_argument(
@@ -88,6 +97,12 @@ def parse_args():
     )
 
     optimizers_args_group = parser.add_argument_group(">> Optimization")
+    optimizers_args_group.add_argument(
+        "--num-sgd-iter",
+        type=int,
+        default=50,
+        help="The number of SGD optimizer iterations (defaul=50).",
+    )
     optimizers_args_group.add_argument(
         "--actor-lr",
         type=float,
@@ -110,8 +125,8 @@ def parse_args():
     optimizers_args_group.add_argument(
         "--actor-delay",
         type=int,
-        default=2,
-        help="The number of traing steps before updating the policy " "(default=2).",
+        default=8,
+        help="The number of traing steps before updating the policy " "(default=8).",
     )
     optimizers_args_group.add_argument(
         "--critic-delay",
@@ -124,8 +139,8 @@ def parse_args():
     exec_args_group.add_argument(
         "--timesteps-total",
         type=int,
-        default=1000,
-        help="The total number of timesteps (default=1000).",
+        default=int(1e5),
+        help="The total number of timesteps (default=100K).",
     )
     exec_args_group.add_argument(
         "--sample-batch-size",
@@ -169,13 +184,6 @@ def parse_args():
         "(default=1).",
     )
     exp_args_group.add_argument("--name", type=str, help="The name of the experiment.")
-    exp_args_group.add_argument(
-        "--use-true-dynamics",
-        action="store_true",
-        default=False,
-        help="Flag to use the true dyamics log prob in the gradient estimator "
-        "(default=False)",
-    )
 
     return parser.parse_args()
 
@@ -189,6 +197,72 @@ def register():
     """Register all agents and custom environtments."""
     register_all_agents()
     register_all_environments()
+
+
+def make_config(args):
+    """Make config dict to trainer."""
+
+    # === Environment ===
+    env_config = {"env": tune.grid_search(args.env)}
+
+    # === MAPO ===
+    mapo_config = {}
+    if args.run in ["MAPO", "OffMAPO"]:
+        mapo_config = {
+            "branching_factor": args.branching_factor,
+            "use_true_dynamics": args.use_true_dynamics,
+            "model_loss": args.model_loss,
+        }
+
+    # === Models ===
+    models_config = {
+        "model": {
+            "custom_model": "mapo_model",
+            "custom_options": {
+                "actor": args.config_actor_net,
+                "critic": args.config_critic_net,
+            },
+        }
+    }
+    if args.run in ["MAPO", "OffMAPO"]:
+        models_config["model"]["custom_model"] = "mapo_model"
+
+        if not args.use_true_dynamics:
+            models_config["model"]["dynamics"] = args.config_dynamics_net
+
+    elif args.run == "OurTD3":
+        models_config["model"]["custom_model"] = "td3_model"
+
+    # === Optimization ===
+    optimization_config = {
+        "optimizer": {"num_sgd_iter": args.num_sgd_iter},
+        "actor_lr": args.actor_lr,
+        "critic_lr": args.critic_lr,
+        "actor_delay": args.actor_delay,
+    }
+    if args.run in ["MAPO", "OffMAPO"]:
+        optimization_config["critic_delay"] = args.critic_delay
+
+        if not args.use_true_dynamics:
+            optimization_config["dynamics_lr"] = args.dynamics_lr
+
+    # === Execution ===
+    execution_config = {
+        "sample_batch_size": args.sample_batch_size,
+        "train_batch_size": args.train_batch_size,
+    }
+
+    # === Resources ===
+    resources_config = {"num_workers": args.num_workers}
+
+    return {
+        **env_config,
+        **mapo_config,
+        **models_config,
+        **optimization_config,
+        **execution_config,
+        **resources_config,
+    }
 
 
 def run(args):
@@ -205,27 +279,39 @@ def run(args):
         #     "cpu": args.num_cpus_for_driver,
         #     "gpu": args.num_gpus,
         # },
-        config={
-            "env": tune.grid_search(args.env),
-            "model": {
-                "custom_model": "mapo_model",
-                "custom_options": {
-                    "actor": args.config_actor_net,
-                    "critic": args.config_critic_net,
-                    "dynamics": args.config_dynamics_net,
-                },
-            },
-            "num_workers": args.num_workers,
-            "sample_batch_size": args.sample_batch_size,
-            "train_batch_size": args.train_batch_size,
-            "actor_delay": args.actor_delay,
-            "critic_delay": args.critic_delay,
-            "actor_lr": args.actor_lr,
-            "critic_lr": args.critic_lr,
-            "dynamics_lr": args.dynamics_lr,
-            "use_true_dynamics": args.use_true_dynamics,
-        },
         num_samples=args.num_samples,
+        config=make_config(args),
+        # config={
+        #     # === Environment ===
+        #     "env": tune.grid_search(args.env),
+        #     # === MAPO ===
+        #     "branching_factor": args.branching_factor,
+        #     "use_true_dynamics": args.use_true_dynamics,
+        #     "model_loss": args.model_loss,
+        #     # === Models ===
+        #     "model": {
+        #         "custom_model": "mapo_model",
+        #         "custom_options": {
+        #             "actor": args.config_actor_net,
+        #             "critic": args.config_critic_net,
+        #             "dynamics": args.config_dynamics_net,
+        #         },
+        #     },
+        #     # === Optimization ===
+        #     "optimizer": {"num_sgd_iter": args.num_sgd_iter},
+        #     "actor_lr": args.actor_lr,
+        #     "critic_lr": args.critic_lr,
+        #     "dynamics_lr": args.dynamics_lr,
+        #     "actor_delay": args.actor_delay,
+        #     "critic_delay": args.critic_delay,
+        #     # === Execution ===
+        #     "sample_batch_size": args.sample_batch_size,
+        #     "train_batch_size": args.train_batch_size,
+        #     # === Resources ===
+        #     "num_workers": args.num_workers,
+        # },
+        checkpoint_freq=20,
+        checkpoint_at_end=True,
     )
 
     return analysis
