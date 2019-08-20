@@ -130,25 +130,21 @@ def apply_gradients_with_delays(policy, optimizer, grads_and_vars):
         should_apply_critic_opt = tf.equal(
             tf.math.mod(policy.global_step, policy.config["critic_delay"]), 0
         )
-
-        def make_critic_apply_op():
-            return optimizer.critic.apply_gradients(critic_grads_and_vars)
-
         with tf.control_dependencies([dynamics_op]):
             critic_op = tf.cond(
-                should_apply_critic_opt, true_fn=make_critic_apply_op, false_fn=tf.no_op
+                should_apply_critic_opt,
+                true_fn=lambda: optimizer.critic.apply_gradients(critic_grads_and_vars),
+                false_fn=tf.no_op,
             )
         # Actor updates
         should_apply_actor_opt = tf.equal(
             tf.math.mod(policy.global_step, policy.config["actor_delay"]), 0
         )
-
-        def make_actor_apply_op():
-            return optimizer.actor.apply_gradients(actor_grads_and_vars)
-
         with tf.control_dependencies([critic_op]):
             actor_op = tf.cond(
-                should_apply_actor_opt, true_fn=make_actor_apply_op, false_fn=tf.no_op
+                should_apply_actor_opt,
+                true_fn=lambda: optimizer.actor.apply_gradients(actor_grads_and_vars),
+                false_fn=tf.no_op,
             )
         return tf.group(dynamics_op, critic_op, actor_op)
 
