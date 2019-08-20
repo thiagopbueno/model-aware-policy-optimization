@@ -228,7 +228,9 @@ def make_config(args):
         models_config["model"]["custom_model"] = "mapo_model"
 
         if not args.use_true_dynamics:
-            models_config["model"]["dynamics"] = args.config_dynamics_net
+            models_config["model"]["custom_options"][
+                "dynamics"
+            ] = args.config_dynamics_net
 
     elif args.run == "OurTD3":
         models_config["model"]["custom_model"] = "td3_model"
