@@ -65,7 +65,7 @@ def parse_args():
     mapo_args_group.add_argument(
         "--kernel",
         type=str,
-        choice=["l1", "l2", "linf", "dot-product", "cos-similarity"],
+        choices=["l1", "l2", "linf", "dot-product", "cos-similarity"],
         default="l2",
         help="Kernel metric to compare gradients in MAPO.",
     )
