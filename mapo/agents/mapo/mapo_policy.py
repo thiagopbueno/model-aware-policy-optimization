@@ -88,7 +88,9 @@ def compute_separate_gradients(policy, optimizer, loss):
     def grads_and_vars(loss, optim, variables):
         return list(zip(optim.get_gradients(loss, variables), variables))
 
-    if not config["use_true_dynamics"]:
+    if config["use_true_dynamics"]:
+        dynamics_grads_and_vars = []
+    else:
         dynamics_grads_and_vars = grads_and_vars(
             dynamics_loss, optimizer.dynamics, policy.model.dynamics_variables
         )
