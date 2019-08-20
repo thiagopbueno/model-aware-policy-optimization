@@ -40,7 +40,7 @@ DEFAULT_CONFIG = with_common_config(
         # target noise limit (bound)
         "target_noise_clip": 0.5,
         # delayed policy update
-        "policy_delay": 2,
+        "actor_delay": 2,
         # How many environment steps to take before learning starts.
         "learning_starts": 0,
         # === Resources ===
