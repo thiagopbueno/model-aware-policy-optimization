@@ -259,6 +259,7 @@ def make_config(args):
 
     # === Execution ===
     execution_config = {
+        "batch_mode": "complete_episodes",
         "sample_batch_size": args.sample_batch_size,
         "train_batch_size": args.train_batch_size,
     }
