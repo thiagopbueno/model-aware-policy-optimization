@@ -125,14 +125,20 @@ def parse_args():
     optimizers_args_group.add_argument(
         "--actor-delay",
         type=int,
-        default=8,
+        default=80,
         help="The number of traing steps before updating the policy " "(default=8).",
     )
     optimizers_args_group.add_argument(
         "--critic-delay",
         type=int,
         default=1,
-        help="The number of traing steps before updating the critic " "(default=2).",
+        help="The number of traing steps before updating the critic " "(default=1).",
+    )
+    optimizers_args_group.add_argument(
+        "--dynamics-delay",
+        type=int,
+        default=20,
+        help="The number of traing steps before updating the dynamics" "(default=1).",
     )
 
     exec_args_group = parser.add_argument_group(">> Execution")
