@@ -157,16 +157,10 @@ def parse_args():
 
     resources_args_group = parser.add_argument_group(">> Resources")
     resources_args_group.add_argument(
-        "--num-workers",
+        "--num-cpus-for-driver",
         type=int,
-        default=0,
-        help="The number of actors used for parallelism (default=0).",
-    )
-    resources_args_group.add_argument(
-        "--num-envs-per-worker",
-        type=int,
-        default=8,
-        help="The number of envs per worker used for parallelism (default=8).",
+        default=1,
+        help="The number of CPUs to allocate to the driver (default=1).",
     )
     resources_args_group.add_argument(
         "--num-gpus",
@@ -175,10 +169,28 @@ def parse_args():
         help="The number of GPUs to allocate to the driver (default=0.0).",
     )
     resources_args_group.add_argument(
-        "--num-cpus-for-driver",
+        "--num-workers",
+        type=int,
+        default=0,
+        help="The number of actors used for parallelism (default=0).",
+    )
+    resources_args_group.add_argument(
+        "--num-cpus-per-worker",
         type=int,
         default=1,
-        help="The number of CPUs to allocate to the driver (default=1).",
+        help="The number of CPUs to allocate to each worker (default=1).",
+    )
+    resources_args_group.add_argument(
+        "--num-gpus-per-worker",
+        type=float,
+        default=0.0,
+        help="The number of GPUs to allocate to each worker (default=0.0).",
+    )
+    resources_args_group.add_argument(
+        "--num-envs-per-worker",
+        type=int,
+        default=8,
+        help="The number of envs per worker used for parallelism (default=8).",
     )
 
     exp_args_group = parser.add_argument_group(">> Experiment")
@@ -266,9 +278,16 @@ def make_config(args):
 
     # === Resources ===
     resources_config = {
+        "num_cpus_for_driver": args.num_cpus_for_driver,
+        "num_gpus": args.num_gpus,
         "num_workers": args.num_workers,
+        "num_cpus_per_worker": args.num_cpus_per_worker,
+        "num_gpus_per_worker": args.num_gpus_per_worker,
         "num_envs_per_worker": args.num_envs_per_worker,
     }
+
+    # === TF Session ===
+    tf_session_config = {"tf_session_args": {"log_device_placement": True}}
 
     return {
         **env_config,
@@ -278,6 +297,7 @@ def make_config(args):
         **optimization_config,
         **execution_config,
         **resources_config,
+        **tf_session_config,
     }
 
 
@@ -291,42 +311,9 @@ def run(args):
         name=experiment,
         verbose=args.verbose,
         stop={"timesteps_total": args.timesteps_total},
-        # resources_per_trial={
-        #     "cpu": args.num_cpus_for_driver,
-        #     "gpu": args.num_gpus,
-        # },
         num_samples=args.num_samples,
         config=make_config(args),
-        # config={
-        #     # === Environment ===
-        #     "env": tune.grid_search(args.env),
-        #     # === MAPO ===
-        #     "branching_factor": args.branching_factor,
-        #     "use_true_dynamics": args.use_true_dynamics,
-        #     "model_loss": args.model_loss,
-        #     # === Models ===
-        #     "model": {
-        #         "custom_model": "mapo_model",
-        #         "custom_options": {
-        #             "actor": args.config_actor_net,
-        #             "critic": args.config_critic_net,
-        #             "dynamics": args.config_dynamics_net,
-        #         },
-        #     },
-        #     # === Optimization ===
-        #     "optimizer": {"num_sgd_iter": args.num_sgd_iter},
-        #     "actor_lr": args.actor_lr,
-        #     "critic_lr": args.critic_lr,
-        #     "dynamics_lr": args.dynamics_lr,
-        #     "actor_delay": args.actor_delay,
-        #     "critic_delay": args.critic_delay,
-        #     # === Execution ===
-        #     "sample_batch_size": args.sample_batch_size,
-        #     "train_batch_size": args.train_batch_size,
-        #     # === Resources ===
-        #     "num_workers": args.num_workers,
-        # },
-        checkpoint_freq=20,
+        checkpoint_freq=10,
         checkpoint_at_end=True,
     )
 
