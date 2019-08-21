@@ -34,16 +34,17 @@ def build_mapo_losses(policy, batch_tensors):
     critic_loss, critic_stats = losses.critic_1step_loss(batch_tensors, model, config)
     policy.loss_stats = {}
     policy.loss_stats.update(critic_stats)
-    if dynamics_loss is not None:
+    if not config["use_true_dynamics"]:
         policy.loss_stats["dynamics_loss"] = dynamics_loss
     policy.loss_stats["critic_loss"] = critic_loss
     policy.loss_stats["actor_loss"] = actor_loss
     policy.mapo_losses = AgentComponents(
         dynamics=dynamics_loss, critic=critic_loss, actor=actor_loss
     )
-    return (
-        (dynamics_loss if dynamics_loss is not None else 0) + critic_loss + actor_loss
-    )
+    mapo_loss = critic_loss + actor_loss
+    if not config["use_true_dynamics"]:
+        mapo_loss += dynamics_loss
+    return mapo_loss
 
 
 def get_default_config():
