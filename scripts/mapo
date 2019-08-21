@@ -69,14 +69,14 @@ def parse_args():
         "--branching-factor",
         type=int,
         default=32,
-        help="The number of virtual samples used in MAPO gradient.",
+        help="The number of virtual samples used in MAPO gradient " "(default=32)",
     )
     mapo_args_group.add_argument(
         "--model-loss",
         type=str,
         choices=["mle", "pga"],
         default="pga",
-        help="The loss function used for learning the dynamics model. " "(default=pga)",
+        help="The loss function used for learning the dynamics model " "(default=pga)",
     )
 
     model_args_group = parser.add_argument_group(">> Models")
@@ -100,8 +100,8 @@ def parse_args():
     optimizers_args_group.add_argument(
         "--num-sgd-iter",
         type=int,
-        default=50,
-        help="The number of SGD optimizer iterations (defaul=50).",
+        default=80,
+        help="The number of SGD optimizer iterations (defaul=80).",
     )
     optimizers_args_group.add_argument(
         "--actor-lr",
@@ -151,14 +151,14 @@ def parse_args():
     exec_args_group.add_argument(
         "--sample-batch-size",
         type=int,
-        default=10,
-        help="The size of the batch collected by workers (default=10).",
+        default=1,
+        help="The size of the batch collected by workers (default=1).",
     )
     exec_args_group.add_argument(
         "--train-batch-size",
         type=int,
-        default=100,
-        help="The size of the batch for training (default=100).",
+        default=128,
+        help="The size of the batch for training (default=128).",
     )
 
     resources_args_group = parser.add_argument_group(">> Resources")
@@ -278,11 +278,13 @@ def make_config(args):
 
     # === Optimization ===
     optimization_config = {
-        "optimizer": {"num_sgd_iter": args.num_sgd_iter},
         "actor_lr": args.actor_lr,
         "critic_lr": args.critic_lr,
         "actor_delay": args.actor_delay,
     }
+    if args.run == "MAPO":
+        optimization_config["num_sgd_iter"] = args.num_sgd_iter
+
     if args.run in ["MAPO", "OffMAPO"]:
         optimization_config["critic_delay"] = args.critic_delay
 
