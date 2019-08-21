@@ -31,6 +31,7 @@ def test_deterministic_evaluation(env_creator, policy_config):
     assert np.allclose(action1, action2)
 
 
+@pytest.mark.skip
 @pytest.mark.slow
 def test_pure_exploration(env_creator, policy_config):
     env = env_creator(policy_config["env_config"])
@@ -52,6 +53,7 @@ def test_pure_exploration(env_creator, policy_config):
     assert p_value >= 0.05
 
 
+@pytest.mark.skip
 @pytest.mark.slow
 def test_iid_gaussian_exploration(env_creator, policy_config):
     env = env_creator(policy_config["env_config"])
