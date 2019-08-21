@@ -109,17 +109,28 @@ def actor_model_aware_loss(batch_tensors, model, env, config):
     gamma = config["gamma"]
     n_samples = config["branching_factor"]
     actions = model.compute_actions(obs)
-    if config["use_true_dynamics"]:
-        sampled_next_state, next_state_log_prob = env._transition_fn(
-            tf.broadcast_to(obs, tf.concat([(n_samples,), tf.shape(obs)], axis=0)),
-            tf.broadcast_to(
-                actions, tf.concat([(n_samples,), tf.shape(actions)], axis=0)
-            ),
-        )
+    if n_samples == 0:
+        sampled_next_state = tf.expand_dims(batch_tensors[SampleBatch.NEXT_OBS], 0)
+        if config["use_true_dynamics"]:
+            next_state_log_prob = env._transition_log_prob_fn(
+                obs, actions, sampled_next_state
+            )
+        else:
+            next_state_log_prob = model.compute_states_log_prob(
+                obs, actions, sampled_next_state
+            )
     else:
-        sampled_next_state, next_state_log_prob = model.compute_log_prob_sampled(
-            obs, actions, (n_samples,)
-        )
+        if config["use_true_dynamics"]:
+            sampled_next_state, next_state_log_prob = env._transition_fn(
+                tf.broadcast_to(obs, tf.concat([(n_samples,), tf.shape(obs)], axis=0)),
+                tf.broadcast_to(
+                    actions, tf.concat([(n_samples,), tf.shape(actions)], axis=0)
+                ),
+            )
+        else:
+            sampled_next_state, next_state_log_prob = model.compute_log_prob_sampled(
+                obs, actions, (n_samples,)
+            )
     next_state_value = tf.stop_gradient(
         tf.squeeze(model.compute_state_values(sampled_next_state))
     )

@@ -15,6 +15,7 @@ DEFAULT_CONFIG = with_common_config(
     {
         # === MAPO ===
         # How many samples to draw from the dynamics model
+        # If this is set to 0, use the next state observed from the environment
         "branching_factor": 1,
         # Whether to use the env's dynamics to calculate the actor loss
         "use_true_dynamics": False,
