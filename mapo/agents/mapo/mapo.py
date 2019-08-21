@@ -45,10 +45,12 @@ DEFAULT_CONFIG = with_common_config(
         "critic_lr": 1e-3,
         # Learning rate for the actor (policy) optimizer.
         "actor_lr": 1e-3,
-        # delayed policy update
-        "actor_delay": 1,
+        # delayed dynamics update
+        "dynamics_delay": 1,
         # delayed critic update
         "critic_delay": 1,
+        # delayed policy update
+        "actor_delay": 1,
         # === Resources ===
         # Number of actors used for parallelism
         "num_workers": 0,
