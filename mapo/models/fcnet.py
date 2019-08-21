@@ -4,11 +4,19 @@ from tensorflow import keras
 
 
 DEFAULT_CONFIG = {
-    "layers": (400, 300),
+    "layers": (32,),
+    # Valid options: keras activation name or config dict
     "activation": "relu",
+    # Whether to use Layer Normalization between hidden layers
     "layer_normalization": False,
-    # Valid options: keras initializer name or "normc"
+    # Valid options: keras initializer name or config dict
     "kernel_initializer": {"class_name": "orthogonal", "config": {"gain": np.sqrt(2)}},
+    # Size of the output layer, if any
+    "output_layer": None,
+    # Valid options: keras activation name or config dict
+    "output_activation": None,
+    # Valid options: keras initializer name or config dict
+    "output_kernel_initializer": {"class_name": "orthogonal", "config": {"gain": 0.01}},
 }
 
 
@@ -41,4 +49,12 @@ def build_fcnet(config):
                     kernel_initializer=kernel_initializer,
                 )
             )
+    if config["output_layer"]:
+        model.add(
+            keras.layers.Dense(
+                units=config["output_layer"],
+                activation=config["output_activation"],
+                kernel_initializer=config["output_kernel_initializer"],
+            )
+        )
     return model
