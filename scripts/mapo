@@ -199,6 +199,20 @@ def parse_args():
         help="The number of envs per worker used for parallelism (default=8).",
     )
 
+    eval_args_group = parser.add_argument_group(">> Evaluation")
+    eval_args_group.add_argument(
+        "--evaluation-interval",
+        type=int,
+        default=10,
+        help="The interval between training steps for evaluation " "(default=10)",
+    )
+    eval_args_group.add_argument(
+        "--evaluation-num-episodes",
+        type=int,
+        default=10,
+        help="The number of episodes to run per evaluation period " "(default=10)",
+    )
+
     exp_args_group = parser.add_argument_group(">> Experiment")
     exp_args_group.add_argument(
         "--num-samples",
@@ -292,6 +306,12 @@ def make_config(args):
         "num_envs_per_worker": args.num_envs_per_worker,
     }
 
+    # === Evaluation ===
+    eval_config = {}
+    if args.run in ["OffMAPO", "OurTD3"]:
+        eval_config["evaluation_interval"] = args.evaluation_interval
+        eval_config["evaluation_num_episodes"] = args.evaluation_num_episodes
+
     # === TF Session ===
     tf_session_config = {"tf_session_args": {"log_device_placement": True}}
 
@@ -303,6 +323,7 @@ def make_config(args):
         **optimization_config,
         **execution_config,
         **resources_config,
+        **eval_config,
         **tf_session_config,
     }
 
