@@ -121,35 +121,32 @@ def apply_gradients_with_delays(policy, optimizer, grads_and_vars):
     `actor_delay` time(s). Also use `actor_delay` for target networks update.
     """
     # pylint: disable=unused-argument
-    dynamics_grads_and_vars, critic_grads_and_vars, actor_grads_and_vars = (
-        policy.all_grads_and_vars.dynamics,
-        policy.all_grads_and_vars.critic,
-        policy.all_grads_and_vars.actor,
-    )
-    with tf.control_dependencies([policy.global_step.assign_add(1)]):
-        # Dynamics updates
-        if policy.config["use_true_dynamics"]:
-            dynamics_op = tf.no_op()
-        else:
-            dynamics_op = optimizer.dynamics.apply_gradients(dynamics_grads_and_vars)
+    global_step, config = policy.global_step, policy.config
+    grads_and_vars = policy.all_grads_and_vars
+    with tf.control_dependencies([global_step.assign_add(1)]):
         # Critic updates
-        should_apply_critic_opt = tf.equal(
-            tf.math.mod(policy.global_step, policy.config["critic_delay"]), 0
+        critic_op = tf.cond(
+            tf.equal(tf.math.mod(global_step, config["critic_delay"]), 0),
+            true_fn=lambda: optimizer.critic.apply_gradients(grads_and_vars.critic),
+            false_fn=tf.no_op,
         )
-        with tf.control_dependencies([dynamics_op]):
-            critic_op = tf.cond(
-                should_apply_critic_opt,
-                true_fn=lambda: optimizer.critic.apply_gradients(critic_grads_and_vars),
-                false_fn=tf.no_op,
-            )
-        # Actor updates
-        should_apply_actor_opt = tf.equal(
-            tf.math.mod(policy.global_step, policy.config["actor_delay"]), 0
-        )
+        # Dynamics updates
         with tf.control_dependencies([critic_op]):
+            if config["use_true_dynamics"]:
+                dynamics_op = tf.no_op()
+            else:
+                dynamics_op = tf.cond(
+                    tf.equal(tf.math.mod(global_step, config["dynamics_delay"]), 0),
+                    true_fn=lambda: optimizer.dynamics.apply_gradients(
+                        grads_and_vars.dynamics
+                    ),
+                    false_fn=tf.no_op,
+                )
+        # Actor updates
+        with tf.control_dependencies([dynamics_op]):
             actor_op = tf.cond(
-                should_apply_actor_opt,
-                true_fn=lambda: optimizer.actor.apply_gradients(actor_grads_and_vars),
+                tf.equal(tf.math.mod(global_step, config["actor_delay"]), 0),
+                true_fn=lambda: optimizer.actor.apply_gradients(grads_and_vars.actor),
                 false_fn=tf.no_op,
             )
         return tf.group(dynamics_op, critic_op, actor_op)
