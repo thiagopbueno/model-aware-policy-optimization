@@ -124,7 +124,7 @@ def actor_model_aware_loss(batch_tensors, model, env, config):
         tf.squeeze(model.compute_state_values(sampled_next_state))
     )
     reward = tf.reduce_mean(env._reward_fn(obs, actions, sampled_next_state), axis=0)
-    model_aware_policy_loss = tf.reduce_mean(
+    model_aware_policy_objective = tf.reduce_mean(
         reward + gamma * tf.reduce_mean(next_state_log_prob * next_state_value, axis=0)
     )
-    return model_aware_policy_loss
+    return -model_aware_policy_objective
