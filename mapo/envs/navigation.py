@@ -114,7 +114,7 @@ class NavigationEnv(MAPOTFCustomEnv):
 
     def _terminal(self):
         reached_goal = np.allclose(self._state, self._end, atol=1e-1)
-        timeout = self._timestep > self._horizon
+        timeout = self._timestep >= self._horizon
         return reached_goal or timeout
 
     def _info(self):

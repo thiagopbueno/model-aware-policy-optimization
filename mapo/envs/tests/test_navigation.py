@@ -1,5 +1,4 @@
-# pylint: disable=missing-docstring
-# pylint: disable=protected-access
+# pylint: disable=missing-docstring,protected-access,redefined-outer-name
 
 import itertools
 import pytest
@@ -17,13 +16,11 @@ from mapo.envs.navigation import NavigationEnv, DEFAULT_CONFIG as config
 mapo.register_all_environments()
 
 
-def get_gym_envs():
-    env0 = _import_navigation_v0(None)
-    env1 = _import_navigation_v1(None)
-    envs = [env0, env1]
-    for env in envs:
-        env.reset()
-    return envs
+@pytest.fixture(params=[_import_navigation_v0, _import_navigation_v1])
+def env(request):
+    env = request.param(None)
+    env.reset()
+    return env
 
 
 def sample_env_states(env, batch_size):
@@ -36,7 +33,6 @@ def sample_env_actions(env, batch_size):
     return action
 
 
-@pytest.mark.parametrize("env", get_gym_envs())
 def test_navigation_config(env):
     assert isinstance(env, NavigationEnv)
     assert np.allclose(env._start, config["start"])
@@ -47,7 +43,6 @@ def test_navigation_config(env):
     assert env._noise["cov"] == config["noise"]["cov"]
 
 
-@pytest.mark.parametrize("env", get_gym_envs())
 def test_observation_space(env):
     observation_space = env.observation_space
     assert isinstance(observation_space, gym.spaces.Box)
@@ -57,7 +52,6 @@ def test_observation_space(env):
     assert observation_space.dtype == np.float32
 
 
-@pytest.mark.parametrize("env", get_gym_envs())
 def test_action_space(env):
     action_space = env.action_space
     assert isinstance(action_space, gym.spaces.Box)
@@ -66,7 +60,6 @@ def test_action_space(env):
     assert action_space.dtype == np.float32
 
 
-@pytest.mark.parametrize("env", get_gym_envs())
 def test_reset(env):
     start_state = env.reset()
     assert np.allclose(start_state, env._start)
@@ -74,7 +67,6 @@ def test_reset(env):
     assert env._timestep == 0
 
 
-@pytest.mark.parametrize("env", get_gym_envs())
 def test_sample_noise(env):
     with env._graph.as_default():
         batch_size = 16
@@ -93,7 +85,6 @@ def test_sample_noise(env):
         assert np.allclose(sess.run(dist.covariance()), config["noise"]["cov"])
 
 
-@pytest.mark.parametrize("env", get_gym_envs())
 def test_distance_to_deceleration_zones(env):
     with env._graph.as_default():
         if env._deceleration_zones:
@@ -103,7 +94,6 @@ def test_distance_to_deceleration_zones(env):
             assert distance.shape == (len(env._deceleration_zones["decay"]),)
 
 
-@pytest.mark.parametrize("env", get_gym_envs())
 def test_deceleration_factors(env):
     with env._graph.as_default():
         if env._deceleration_zones:
@@ -115,7 +105,6 @@ def test_deceleration_factors(env):
             assert factor.shape == (len(env._deceleration_zones["decay"]),)
 
 
-@pytest.mark.parametrize("env", get_gym_envs())
 def test_transition(env):
     with env._graph.as_default():
         action_low = env.action_space.low
@@ -144,7 +133,6 @@ def test_transition(env):
             assert np.allclose(noise_cov, env._noise["cov"], atol=1e-1)
 
 
-@pytest.mark.parametrize("env", get_gym_envs())
 def test_reward(env):
     with env._graph.as_default():
         dummy_action = env.action_space.sample()
@@ -156,9 +144,8 @@ def test_reward(env):
         assert np.allclose(reward, -np.sqrt(2 * 20 ** 2))
 
 
-@pytest.mark.parametrize("env", get_gym_envs())
 def test_terminal(env):
-    timesteps = list(range(0, env._horizon + 1))
+    timesteps = list(range(0, env._horizon))
     states = env._end + np.random.uniform(low=1e-1, high=100.0, size=(100, 2))
     for timestep, state in itertools.product(timesteps, states):
         env._timestep = timestep
@@ -170,11 +157,20 @@ def test_terminal(env):
         assert env._terminal()
 
     env.reset()
-    env._timestep = env._horizon + 1
+    env._timestep = env._horizon
     assert env._terminal()
 
 
-@pytest.mark.parametrize("env", get_gym_envs())
+def test_rollout_length(env):
+    action = np.array([0.0, 0.0])
+    horizon = env._horizon
+    done, length = False, 0
+    while not done:
+        _, _, done, _ = env.step(action)
+        length += 1
+    assert length == horizon
+
+
 def test_step(env):
     action_low = env.action_space.low
     action_high = env.action_space.high
@@ -188,7 +184,6 @@ def test_step(env):
     assert isinstance(info, dict)
 
 
-@pytest.mark.parametrize("env", get_gym_envs())
 def test_transition_fn(env):
     with env._graph.as_default():
         batch_size = 32
@@ -203,7 +198,6 @@ def test_transition_fn(env):
         assert log_prob.dtype == next_state.dtype
 
 
-@pytest.mark.parametrize("env", get_gym_envs())
 def test_transition_log_prob_fn(env):
     with env._graph.as_default():
         batch_size = 16
@@ -226,7 +220,6 @@ def test_transition_log_prob_fn(env):
         assert np.allclose(expected, actual)
 
 
-@pytest.mark.parametrize("env", get_gym_envs())
 def test_reward_fn(env):
     with env._graph.as_default():
         batch_size = 16
