@@ -56,10 +56,10 @@ class MAPOTFCustomEnv(gym.Env):
     def step(self, action):
         next_state, _ = self._transition(self._state, action)
         reward = self._reward(self._state, action, next_state)
+        self._state = next_state
         self._timestep += 1
         done = self._terminal()
         info = self._info()
-        self._state = next_state
         return self.obs, reward, done, info
 
     def reset(self):
