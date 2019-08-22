@@ -54,6 +54,17 @@ DEFAULT_CONFIG = with_common_config(
         # === Resources ===
         # Number of actors used for parallelism
         "num_workers": 0,
+        # === Debugging ===
+        # Specify where experiences should be saved:
+        #  - None: don't save any experiences
+        #  - "logdir" to save to the agent log dir
+        #  - a path/URI to save to a custom output directory (e.g., "s3://bucket/")
+        #  - a function that returns a rllib.offline.OutputWriter
+        "output": None,
+        # What sample batch columns to LZ4 compress in the output data.
+        # RLlib's default is ["obs", "new_obs"], which saves space but makes the
+        # output unreadable.
+        "output_compress_columns": [],
     }
 )
 
