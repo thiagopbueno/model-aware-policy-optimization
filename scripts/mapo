@@ -49,6 +49,12 @@ def parse_args():
         "1 = only status updates, 2 = status and trial results "
         "(default=2)",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=False,
+        help="Debugging flag (default=False).",
+    )
 
     mapo_args_group = parser.add_argument_group(">> MAPO")
     mapo_args_group.add_argument(
@@ -314,6 +320,9 @@ def make_config(args):
         eval_config["evaluation_interval"] = args.evaluation_interval
         eval_config["evaluation_num_episodes"] = args.evaluation_num_episodes
 
+    # === Debugging ===
+    debugging_config = {"output": "logdir" if args.debug else None}
+
     # === TF Session ===
     tf_session_config = {"tf_session_args": {"log_device_placement": True}}
 
@@ -326,6 +335,7 @@ def make_config(args):
         **execution_config,
         **resources_config,
         **eval_config,
+        **debugging_config,
         **tf_session_config,
     }
 
