@@ -15,7 +15,6 @@ DEFAULT_CONFIG = {
     "action_upper_bound": [1.0, 1.0],
     "deceleration_zones": {"center": [[0.0, 0.0]], "decay": [2.0]},
     "noise": {"mean": [0.0, 0.0], "cov": [[0.3, 0.0], [0.0, 0.3]]},
-    "horizon": 20,
 }
 
 
@@ -72,8 +71,6 @@ class NavigationEnv(MAPOTFCustomEnv):
 
         self._noise = self._config["noise"]
 
-        self._horizon = self._config["horizon"]
-
         super(NavigationEnv, self).__init__(state_shape=(2,), action_shape=(2,))
 
     def render(self, mode="human"):
@@ -114,8 +111,7 @@ class NavigationEnv(MAPOTFCustomEnv):
 
     def _terminal(self):
         reached_goal = np.allclose(self._state, self._end, atol=1e-1)
-        timeout = self._timestep >= self._horizon
-        return reached_goal or timeout
+        return reached_goal
 
     def _info(self):
         return {}
