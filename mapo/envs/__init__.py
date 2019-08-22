@@ -3,8 +3,6 @@ import abc
 import gym
 import tensorflow as tf
 
-# from mapo.envs.navigation import NavigationEnv
-
 
 class MAPOTFCustomEnv(gym.Env):
     """MAPOCustomEnv defines an API on top of gym.Env in order
@@ -24,7 +22,6 @@ class MAPOTFCustomEnv(gym.Env):
         self.action_shape = action_shape
 
         self._state = None
-        self._timestep = None
 
         self._graph = tf.Graph()
         self._build_ops()
@@ -57,14 +54,12 @@ class MAPOTFCustomEnv(gym.Env):
         next_state, _ = self._transition(self._state, action)
         reward = self._reward(self._state, action, next_state)
         self._state = next_state
-        self._timestep += 1
         done = self._terminal()
         info = self._info()
         return self.obs, reward, done, info
 
     def reset(self):
         self._state = self.start_state
-        self._timestep = 0
         return self.obs
 
     def close(self):
@@ -109,3 +104,64 @@ class MAPOTFCustomEnv(gym.Env):
             self._next_state_placeholder: next_state,
         }
         return self._sess.run(self._reward_tensor, feed_dict=feed_dict)
+
+
+class TimeAwareTFEnv(MAPOTFCustomEnv):
+    # pylint: disable=abstract-method,
+    STATE = "state"
+    TIME = "time"
+
+    def __init__(self, env, horizon=20):
+        # pylint: disable=super-init-not-called
+        self._env = env
+        self._horizon = horizon
+        self._timestep = None
+        self.observation_space = gym.spaces.Dict(
+            {self.STATE: env.observation_space, self.TIME: gym.spaces.Discrete(horizon)}
+        )
+        self.action_space = env.action_space
+
+    @property
+    def unwrapped(self):
+        return self._env
+
+    @property
+    def horizon(self):
+        return self._horizon
+
+    def step(self, action):
+        next_obs, reward, done, info = self._env.step(action)
+        self._timestep += 1
+        next_state = {self.STATE: next_obs, self.TIME: self._timestep}
+        done = done or self._timestep >= self._horizon
+        return next_state, reward, done, info
+
+    def reset(self):
+        obs = self._env.reset()
+        self._timestep = 0
+        state = {self.STATE: obs, self.TIME: self._timestep}
+        return state
+
+    def close(self):
+        self._env.close()
+
+    def _transition_fn(self, state, action):
+        # pylint: disable=protected-access
+        state, time = state[self.STATE], state[self.TIME]
+        next_state, log_prob = self._env._transition_fn(state, action)
+        time = time + 1
+        return {self.STATE: next_state, self.TIME: time}, log_prob
+
+    def _transition_log_prob_fn(self, state, action, next_state):
+        # pylint: disable=protected-access
+        state = state[self.STATE]
+        next_state = next_state[self.STATE]
+        log_prob = self._env._transition_log_prob_fn(state, action, next_state)
+        return log_prob
+
+    def _reward_fn(self, state, action, next_state):
+        # pylint: disable=protected-access
+        state = state[self.STATE]
+        next_state = next_state[self.STATE]
+        reward = self._env._reward_fn(state, action, next_state)
+        return reward

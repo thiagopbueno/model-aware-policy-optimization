@@ -1,6 +1,4 @@
 # pylint: disable=missing-docstring,protected-access,redefined-outer-name
-
-import itertools
 import pytest
 
 import numpy as np
@@ -18,7 +16,7 @@ mapo.register_all_environments()
 
 @pytest.fixture(params=[_import_navigation_v0, _import_navigation_v1])
 def env(request):
-    env = request.param(None)
+    env = request.param(None).unwrapped
     env.reset()
     return env
 
@@ -64,7 +62,6 @@ def test_reset(env):
     start_state = env.reset()
     assert np.allclose(start_state, env._start)
     assert np.allclose(start_state, env.obs)
-    assert env._timestep == 0
 
 
 def test_sample_noise(env):
@@ -145,30 +142,14 @@ def test_reward(env):
 
 
 def test_terminal(env):
-    timesteps = list(range(0, env._horizon))
     states = env._end + np.random.uniform(low=1e-1, high=100.0, size=(100, 2))
-    for timestep, state in itertools.product(timesteps, states):
-        env._timestep = timestep
+    for state in states:
         env._state = state
         assert not env._terminal()
 
     for noise in np.random.normal(loc=0.0, scale=0.01, size=(100, 2)):
         env._state = env._end + noise
         assert env._terminal()
-
-    env.reset()
-    env._timestep = env._horizon
-    assert env._terminal()
-
-
-def test_rollout_length(env):
-    action = np.array([0.0, 0.0])
-    horizon = env._horizon
-    done, length = False, 0
-    while not done:
-        _, _, done, _ = env.step(action)
-        length += 1
-    assert length == horizon
 
 
 def test_step(env):

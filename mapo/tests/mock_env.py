@@ -21,8 +21,6 @@ class MockEnv(MAPOTFCustomEnv):  # pylint: disable=abstract-method
     def __init__(self, config=None):
         config = config or {}
         self.config = {**_DEFAULT_CONFIG, **config}
-        self.horizon = 200
-        self.time = 0
         self.observation_space = Box(low=-1, high=1, shape=(4,), dtype=np.float32)
         action_dim = self.config["action_dim"]
         low, high = self.config["action_low"], self.config["action_high"]
@@ -70,7 +68,7 @@ class MockEnv(MAPOTFCustomEnv):  # pylint: disable=abstract-method
         )
 
     def _terminal(self):
-        return self.time >= self.horizon
+        return False
 
     def _info(self):
         return {}
