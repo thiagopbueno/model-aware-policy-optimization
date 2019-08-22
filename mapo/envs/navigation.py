@@ -110,7 +110,7 @@ class NavigationEnv(MAPOTFCustomEnv):
     def _reward_fn(self, state, action, next_state):
         # pylint: disable=invalid-unary-operand-type
         goal = tf.constant(self._end, name="goal")
-        return -tf.norm(state - goal, axis=-1)
+        return -tf.norm(next_state - goal, axis=-1)
 
     def _terminal(self):
         reached_goal = np.allclose(self._state, self._end, atol=1e-1)
