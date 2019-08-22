@@ -283,7 +283,7 @@ def make_config(args):
         "actor_delay": args.actor_delay,
     }
     if args.run == "MAPO":
-        optimization_config["num_sgd_iter"] = args.num_sgd_iter
+        optimization_config["optimizer"] = {"num_sgd_iter": args.num_sgd_iter}
 
     if args.run in ["MAPO", "OffMAPO"]:
         optimization_config["critic_delay"] = args.critic_delay
