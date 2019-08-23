@@ -4,7 +4,6 @@ import gym
 import tensorflow as tf
 
 from ray.rllib.models import ModelCatalog
-from ray.rllib.models.model import restore_original_dimensions
 
 
 class MAPOTFCustomEnv(gym.Env):
@@ -44,8 +43,12 @@ class MAPOTFCustomEnv(gym.Env):
                 tf.float32, shape=self.state_shape
             )
 
-            self._transition_tensor = self._transition_fn(
+            next_state, log_prob = self._transition_fn(
                 self._state_placeholder, self._action_placeholder
+            )
+            self._transition_tensor = (
+                tf.squeeze(next_state, axis=0),
+                tf.squeeze(log_prob, axis=0),
             )
             self._reward_tensor = self._reward_fn(
                 self._state_placeholder,
@@ -77,7 +80,7 @@ class MAPOTFCustomEnv(gym.Env):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _transition_fn(self, state, action):
+    def _transition_fn(self, state, action, n_samples=1):
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -98,7 +101,10 @@ class MAPOTFCustomEnv(gym.Env):
 
     def _transition(self, state, action):
         feed_dict = {self._state_placeholder: state, self._action_placeholder: action}
-        return self._sess.run(self._transition_tensor, feed_dict=feed_dict)
+        next_state, log_prob = self._sess.run(
+            self._transition_tensor, feed_dict=feed_dict
+        )
+        return next_state, log_prob
 
     def _reward(self, state, action, next_state):
         feed_dict = {
@@ -111,19 +117,14 @@ class MAPOTFCustomEnv(gym.Env):
 
 class TimeAwareTFEnv(MAPOTFCustomEnv):
     # pylint: disable=abstract-method,
-    STATE = "state"
-    TIMESTEP = "timestep"
 
     def __init__(self, env, horizon=20):
         # pylint: disable=super-init-not-called
         self._env = env
         self._horizon = horizon
         self._timestep = None
-        self.observation_space = gym.spaces.Dict(
-            {
-                self.STATE: env.observation_space,
-                self.TIMESTEP: gym.spaces.Discrete(horizon),
-            }
+        self.observation_space = gym.spaces.Tuple(
+            (env.observation_space, gym.spaces.Discrete(horizon + 1))
         )
         self._prep = ModelCatalog.get_preprocessor_for_space(self.observation_space)
         self.action_space = env.action_space
@@ -139,59 +140,43 @@ class TimeAwareTFEnv(MAPOTFCustomEnv):
     def step(self, action):
         next_obs, reward, done, info = self._env.step(action)
         self._timestep += 1
-        next_state = {self.STATE: next_obs, self.TIMESTEP: self._timestep}
+        next_state = (next_obs, self._timestep)
         done = done or self._timestep >= self._horizon
         return next_state, reward, done, info
 
     def reset(self):
         obs = self._env.reset()
         self._timestep = 0
-        state = {self.STATE: obs, self.TIMESTEP: self._timestep}
+        state = (obs, self._timestep)
         return state
 
     def close(self):
         self._env.close()
 
-    def _transition_fn(self, state, action):
+    def _transition_fn(self, state, action, n_samples=1):
         # pylint: disable=protected-access
-        state, time = restore_state_tensor(state, self._prep.observation_space)
-        next_state, log_prob = self._env._transition_fn(state, action)
-        time = time + 1
-        return {self.STATE: next_state, self.TIMESTEP: time}, log_prob
+        state, time = state
+        next_state, log_prob = self._env._transition_fn(state, action, n_samples)
+        time = increment_one_hot_time(time, n_samples)
+        return (next_state, time), log_prob
 
     def _transition_log_prob_fn(self, state, action, next_state):
         # pylint: disable=protected-access
-        state, _ = restore_state_tensor(state, self._prep.observation_space)
-        next_state, _ = restore_state_tensor(next_state, self._prep.observation_space)
+        state, _ = state
+        next_state, _ = next_state
         log_prob = self._env._transition_log_prob_fn(state, action, next_state)
         return log_prob
 
     def _reward_fn(self, state, action, next_state):
         # pylint: disable=protected-access
-        state, _ = restore_state_tensor(state, self._prep.observation_space)
-        next_state, _ = restore_state_tensor(next_state, self._prep.observation_space)
+        state, _ = state
+        next_state, _ = next_state
         reward = self._env._reward_fn(state, action, next_state)
         return reward
 
 
-def restore_state_tensor(inputs, observation_space):
-    batch_shape = tf.shape(inputs)[:-1]
-    inputs = tf.reshape(inputs, shape=(-1, observation_space.shape[0]))
-    inputs = restore_original_dimensions(
-        inputs, observation_space, tensorlib=tf
-    )
-    if isinstance(inputs, dict):
-        for key, value in inputs.items():
-            inputs[key] = tf.reshape(value, shape=tf.concat([batch_shape,
-                                                            tf.shape(value)[-1:]],
-                                                            axis=0))
-
-        return (
-            inputs[TimeAwareTFEnv.STATE],
-            inputs[TimeAwareTFEnv.TIMESTEP],
-        )
-    else:
-        inputs = tf.reshape(inputs, shape=tf.concat([batch_shape,
-                                                    tf.shape(inputs)[-1:]],
-                                                    axis=0))
-        return inputs, None
+def increment_one_hot_time(time, n_samples):
+    time_int = tf.argmax(time, axis=-1)
+    new_time_int = time_int + 1
+    new_time = tf.one_hot(new_time_int, depth=time.shape[-1])
+    return tf.stack([new_time] * n_samples)

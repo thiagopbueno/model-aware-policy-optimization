@@ -6,6 +6,7 @@ from ray.tune.registry import ENV_CREATOR, _global_registry
 from ray.rllib.policy import build_tf_policy
 from ray.rllib.policy.sample_batch import SampleBatch
 from ray.rllib.models.catalog import ModelCatalog
+from ray.rllib.models.model import restore_original_dimensions
 from ray.rllib.utils.error import UnsupportedSpaceException
 
 import mapo.agents.mapo.losses as losses
@@ -20,8 +21,13 @@ from mapo.agents.mapo.mapo_policy import (
 
 def build_mapo_losses(policy, batch_tensors):
     """Contruct dynamics (MLE/PG-aware), critic (Fitted Q) and actor (MADPG) losses."""
+    for key in [SampleBatch.CUR_OBS, SampleBatch.NEXT_OBS]:
+        batch_tensors[key] = restore_original_dimensions(
+            batch_tensors[key], policy.observation_space
+        )
     model, config = policy.model, policy.config
     env = _global_registry.get(ENV_CREATOR, config["env"])(config["env_config"])
+
     actor_loss = losses.actor_model_aware_loss(batch_tensors, model, env, config)
     if config["use_true_dynamics"]:
         dynamics_loss = None
@@ -32,12 +38,14 @@ def build_mapo_losses(policy, batch_tensors):
     else:
         dynamics_loss = losses.dynamics_mle_loss(batch_tensors, model)
     critic_loss, critic_stats = losses.critic_1step_loss(batch_tensors, model, config)
+
     policy.loss_stats = {}
-    policy.loss_stats.update(critic_stats)
     if not config["use_true_dynamics"]:
         policy.loss_stats["dynamics_loss"] = dynamics_loss
     policy.loss_stats["critic_loss"] = critic_loss
+    policy.loss_stats.update(critic_stats)
     policy.loss_stats["actor_loss"] = actor_loss
+
     policy.mapo_losses = AgentComponents(
         dynamics=dynamics_loss, critic=critic_loss, actor=actor_loss
     )
@@ -116,7 +124,9 @@ def copy_targets(policy, obs_space, action_space, config):
 def build_action_sampler(policy, model, input_dict, obs_space, action_space, config):
     """Add exploration noise when not evaluating the policy."""
     # pylint: disable=too-many-arguments,unused-argument
-    deterministic_actions = model.compute_actions(input_dict[SampleBatch.CUR_OBS])
+    deterministic_actions = model.compute_actions(
+        restore_original_dimensions(input_dict[SampleBatch.CUR_OBS], obs_space)
+    )
     policy.evaluating = tf.placeholder(tf.bool, shape=[])
     policy.pure_exploration_phase = tf.placeholder(tf.bool, shape=[])
 

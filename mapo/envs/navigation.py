@@ -84,13 +84,13 @@ class NavigationEnv(MAPOTFCustomEnv):
     def obs(self):
         return self._state
 
-    def _transition_fn(self, state, action):
+    def _transition_fn(self, state, action, n_samples=1):
         deceleration = 1.0
         if self._deceleration_zones:
             deceleration = self._deceleration()
 
         position = state + (deceleration * action)
-        dist, next_state = self._sample_noise(position)
+        dist, next_state = self._sample_noise(position, n_samples)
         log_prob = dist.log_prob(tf.stop_gradient(next_state))
         return next_state, log_prob
 
@@ -100,7 +100,7 @@ class NavigationEnv(MAPOTFCustomEnv):
             deceleration = self._deceleration()
 
         position = state + (deceleration * action)
-        dist, _ = self._sample_noise(position)
+        dist, _ = self._sample_noise(position, 1)
         log_prob = dist.log_prob(tf.stop_gradient(next_state))
         return log_prob
 
@@ -116,12 +116,12 @@ class NavigationEnv(MAPOTFCustomEnv):
     def _info(self):
         return {}
 
-    def _sample_noise(self, position):
+    def _sample_noise(self, position, n_samples):
         tfd = tfp.distributions
         mean = position + self._noise["mean"]
         cov = self._noise["cov"]
         dist = tfd.MultivariateNormalFullCovariance(loc=mean, covariance_matrix=cov)
-        sample = dist.sample()
+        sample = dist.sample(sample_shape=(n_samples,))
         return dist, sample
 
     def _deceleration(self):

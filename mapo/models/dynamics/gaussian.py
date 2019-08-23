@@ -7,6 +7,7 @@ import tensorflow_probability as tfp
 
 from ray.rllib.utils.annotations import override
 from mapo.models.layers import TimeAwareObservationLayer
+from mapo.envs import increment_one_hot_time
 
 
 class GaussianDynamicsModel(keras.Model):
@@ -34,7 +35,6 @@ class GaussianDynamicsModel(keras.Model):
 
         self.config = {**kwargs}
 
-
         self.obs_layer = TimeAwareObservationLayer(
             self.obs_space,
             obs_embedding_dim=self.config.get("obs_embedding_dim", 32),
@@ -55,11 +55,15 @@ class GaussianDynamicsModel(keras.Model):
             "output_kernel_initializer",
             {"class_name": "orthogonal", "config": {"gain": 0.01}},
         )
+        if hasattr(self.obs_space, "original_space"):
+            logit_dim = self.obs_space.original_space.spaces[0].shape[0]
+        else:
+            logit_dim = self.obs_space.shape[0]
         self.mean_output_layer = Dense(
-            self.obs_space.shape[0], kernel_initializer=output_kernel_initializer
+            logit_dim, kernel_initializer=output_kernel_initializer
         )
         self.log_stddev_output_layer = Dense(
-            self.obs_space.shape[0], kernel_initializer=output_kernel_initializer
+            logit_dim, kernel_initializer=output_kernel_initializer
         )
 
     @override(keras.models.Model)
@@ -92,30 +96,26 @@ class GaussianDynamicsModel(keras.Model):
         """Returns a sample of given shape conditioned on the state
         and the action."""
         dist = self.dist(state, action)
-        # state, time = restore_state_tensor(state, self.obs_space)
-        # time = time + 1
-        # time = tf.stack([time] * shape[0], axis=0)
         next_state = dist.sample(shape)
+        if isinstance(state, (tuple, list)):
+            _, time = state
+            next_state = next_state, increment_one_hot_time(time, shape[0])
         return next_state
-        # return {TimeAwareTFEnv.STATE: next_state, TimeAwareTFEnv.TIMESTEP: time}
 
     def log_prob(self, state, action, next_state):
         """Returns the scalar log-probability for the transition given by
         (state, action, next_state)."""
-        # state, _ = restore_state_tensor(state, self.obs_space)
-        # next_state, _ = restore_state_tensor(next_state, self.obs_space)
         dist = self.dist(state, action)
         log_probs = dist.log_prob(next_state)
         log_prob = tf.reduce_sum(log_probs, axis=-1)
         return log_prob
 
     def log_prob_sampled(self, state, action, shape=()):
-        # state, time = restore_state_tensor(state, self.obs_space)
-        # time = time + 1
-        # time = tf.stack([time] * shape[0], axis=0)
         dist = self.dist(state, action)
         next_state = tf.stop_gradient(dist.sample(shape))
         log_probs = dist.log_prob(next_state)
         log_prob = tf.reduce_sum(log_probs, axis=-1)
-        # next_state = {TimeAwareTFEnv.STATE: next_state, TimeAwareTFEnv.TIMESTEP: time}
+        if isinstance(state, (tuple, list)):
+            _, time = state
+            next_state = next_state, increment_one_hot_time(time, shape[0])
         return next_state, log_prob

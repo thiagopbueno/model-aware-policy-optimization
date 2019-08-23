@@ -10,6 +10,7 @@ from ray.rllib.policy import build_tf_policy
 from ray.rllib.utils.error import UnsupportedSpaceException
 from ray.rllib.policy.sample_batch import SampleBatch
 from ray.rllib.models.catalog import ModelCatalog
+from ray.rllib.models.model import restore_original_dimensions
 from ray.rllib.evaluation.postprocessing import compute_advantages
 
 import mapo.agents.mapo.losses as losses
@@ -20,8 +21,13 @@ AgentComponents = namedtuple("AgentComponents", "dynamics critic actor")
 
 def build_mapo_losses(policy, batch_tensors):
     """Contruct dynamics (MLE/PG-aware), critic (Fitted Q) and actor (MADPG) losses."""
+    for key in [SampleBatch.CUR_OBS, SampleBatch.NEXT_OBS]:
+        batch_tensors[key] = restore_original_dimensions(
+            batch_tensors[key], policy.observation_space
+        )
     model, config = policy.model, policy.config
     env = _global_registry.get(ENV_CREATOR, config["env"])(config["env_config"])
+
     actor_loss = losses.actor_model_aware_loss(batch_tensors, model, env, config)
     if config["use_true_dynamics"]:
         dynamics_loss = None
@@ -32,12 +38,14 @@ def build_mapo_losses(policy, batch_tensors):
     else:
         dynamics_loss = losses.dynamics_mle_loss(batch_tensors, model)
     critic_loss, critic_fetches = losses.critic_return_loss(batch_tensors, model)
+
     policy.loss_stats = {}
-    policy.loss_stats.update(critic_fetches)
     if not config["use_true_dynamics"]:
         policy.loss_stats["dynamics_loss"] = dynamics_loss
     policy.loss_stats["critic_loss"] = critic_loss
+    policy.loss_stats.update(critic_fetches)
     policy.loss_stats["actor_loss"] = actor_loss
+
     policy.mapo_losses = AgentComponents(
         dynamics=dynamics_loss, critic=critic_loss, actor=actor_loss
     )
@@ -180,7 +188,12 @@ def build_mapo_network(policy, obs_space, action_space, config):
 def main_actor_output(policy, model, input_dict, obs_space, action_space, config):
     """Simply use the deterministic actor output as the action."""
     # pylint: disable=too-many-arguments,unused-argument
-    return model.compute_actions(input_dict[SampleBatch.CUR_OBS]), None
+    return (
+        model.compute_actions(
+            restore_original_dimensions(input_dict[SampleBatch.CUR_OBS], obs_space)
+        ),
+        None,
+    )
 
 
 MAPOTFPolicy = build_tf_policy(

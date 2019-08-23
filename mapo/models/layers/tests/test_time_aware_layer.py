@@ -4,18 +4,14 @@ import gym.spaces as spaces
 import tensorflow as tf
 from ray.rllib.models import ModelCatalog
 
+from mapo.models import obs_input
 from mapo.models.layers import TimeAwareObservationLayer
 
 
 def get_spaces():
     return [
         spaces.Box(low=-1.0, high=1.0, shape=(4,)),
-        spaces.Dict(
-            {
-                "state": spaces.Box(low=-1.0, high=1.0, shape=(4,)),
-                "time": spaces.Discrete(10),
-            }
-        ),
+        spaces.Tuple((spaces.Box(low=-1.0, high=1.0, shape=(4,)), spaces.Discrete(10))),
     ]
 
 
@@ -38,9 +34,7 @@ def layer(space, input_layer_norm):
 
 
 def obs_tensor(space):
-    obs = space.sample()
-    obs_tensor = tf.constant(obs)[None]
-    return obs_tensor
+    return obs_input(space)
 
 
 def test_initialization(space, input_layer_norm):
@@ -67,6 +61,7 @@ def test_call(layer):
     output = layer(obs_tensor(layer.observation_space))
 
     assert output.shape[-1] == layer.obs_embedding_dim
+    assert len(output.shape) == 2
     assert all(
         grad is not None
         for grad in tf.gradients(tf.reduce_sum(output), layer.variables)
