@@ -54,6 +54,7 @@ class MAPOModel(TFModelV2):  # pylint: disable=abstract-method
                 obs_space, action_space, **self.options["dynamics"]
             )
             # Hack to create dynamics variables on initialization
+
             models["dynamics"]([obs_input(obs_space), action_input(action_space)])
 
         self.models = models

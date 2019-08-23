@@ -2,5 +2,8 @@
   "activation": "elu",
   "layers": [
     64
-  ]
+  ],
+  "obs_embedding_dim": 64,
+  "input_layer_norm": true,
+  "layer_normalization": false
 }

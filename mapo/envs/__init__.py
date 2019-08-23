@@ -3,6 +3,9 @@ import abc
 import gym
 import tensorflow as tf
 
+from ray.rllib.models import ModelCatalog
+from ray.rllib.models.model import restore_original_dimensions
+
 
 class MAPOTFCustomEnv(gym.Env):
     """MAPOCustomEnv defines an API on top of gym.Env in order
@@ -122,6 +125,7 @@ class TimeAwareTFEnv(MAPOTFCustomEnv):
                 self.TIMESTEP: gym.spaces.Discrete(horizon),
             }
         )
+        self._prep = ModelCatalog.get_preprocessor_for_space(self.observation_space)
         self.action_space = env.action_space
 
     @property
@@ -150,21 +154,44 @@ class TimeAwareTFEnv(MAPOTFCustomEnv):
 
     def _transition_fn(self, state, action):
         # pylint: disable=protected-access
-        state, time = state[self.STATE], state[self.TIMESTEP]
+        state, time = restore_state_tensor(state, self._prep.observation_space)
         next_state, log_prob = self._env._transition_fn(state, action)
         time = time + 1
         return {self.STATE: next_state, self.TIMESTEP: time}, log_prob
 
     def _transition_log_prob_fn(self, state, action, next_state):
         # pylint: disable=protected-access
-        state = state[self.STATE]
-        next_state = next_state[self.STATE]
+        state, _ = restore_state_tensor(state, self._prep.observation_space)
+        next_state, _ = restore_state_tensor(next_state, self._prep.observation_space)
         log_prob = self._env._transition_log_prob_fn(state, action, next_state)
         return log_prob
 
     def _reward_fn(self, state, action, next_state):
         # pylint: disable=protected-access
-        state = state[self.STATE]
-        next_state = next_state[self.STATE]
+        state, _ = restore_state_tensor(state, self._prep.observation_space)
+        next_state, _ = restore_state_tensor(next_state, self._prep.observation_space)
         reward = self._env._reward_fn(state, action, next_state)
         return reward
+
+
+def restore_state_tensor(inputs, observation_space):
+    batch_shape = tf.shape(inputs)[:-1]
+    inputs = tf.reshape(inputs, shape=(-1, observation_space.shape[0]))
+    inputs = restore_original_dimensions(
+        inputs, observation_space, tensorlib=tf
+    )
+    if isinstance(inputs, dict):
+        for key, value in inputs.items():
+            inputs[key] = tf.reshape(value, shape=tf.concat([batch_shape,
+                                                            tf.shape(value)[-1:]],
+                                                            axis=0))
+
+        return (
+            inputs[TimeAwareTFEnv.STATE],
+            inputs[TimeAwareTFEnv.TIMESTEP],
+        )
+    else:
+        inputs = tf.reshape(inputs, shape=tf.concat([batch_shape,
+                                                    tf.shape(inputs)[-1:]],
+                                                    axis=0))
+        return inputs, None

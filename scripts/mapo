@@ -203,6 +203,19 @@ def parse_args():
         help="The total number of timesteps (default=100K).",
     )
     exec_args_group.add_argument(
+        "--timesteps-per-iteration",
+        type=int,
+        default=1024,
+        help="The number of timesteps before returning to the trainer (default=1024).",
+    )
+    exec_args_group.add_argument(
+        "--batch-mode",
+        type=str,
+        choices=["complete_episodes", "truncate_episodes"],
+        default="complete_episodes",
+        help="The batch mode (default=complete_episodes).",
+    )
+    exec_args_group.add_argument(
         "--sample-batch-size",
         type=int,
         default=1,
@@ -350,9 +363,10 @@ def make_config(args):
 
     # === Execution ===
     execution_config = {
-        "batch_mode": "complete_episodes",
+        "batch_mode": args.batch_mode,
         "sample_batch_size": args.sample_batch_size,
         "train_batch_size": args.train_batch_size,
+        "timesteps_per_iteration": args.timesteps_per_iteration,
     }
 
     # === Resources ===
@@ -375,7 +389,7 @@ def make_config(args):
     debugging_config = {"output": "logdir" if args.debug else None}
 
     # === TF Session ===
-    tf_session_config = {"tf_session_args": {"log_device_placement": True}}
+    tf_session_config = {"tf_session_args": {"log_device_placement": False}}
 
     return {
         **env_config,
