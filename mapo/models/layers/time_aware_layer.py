@@ -29,7 +29,7 @@ class TimeAwareObservationLayer(keras.layers.Layer):
 
         if (
             isinstance(self.observation_space, spaces.Dict)
-            and "time" in self.observation_space.spaces
+            and TimeAwareTFEnv.TIMESTEP in self.observation_space.spaces
         ):
             self.time_layer = keras.layers.Dense(
                 self.obs_embedding_dim, activation="tanh", name="time_embedding"
@@ -56,7 +56,7 @@ class TimeAwareObservationLayer(keras.layers.Layer):
         if isinstance(inputs, dict):
             state_input, time_input = (
                 inputs[TimeAwareTFEnv.STATE],
-                inputs[TimeAwareTFEnv.TIME],
+                inputs[TimeAwareTFEnv.TIMESTEP],
             )
         else:
             state_input, time_input = inputs, None

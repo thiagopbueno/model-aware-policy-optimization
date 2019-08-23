@@ -37,5 +37,5 @@ def test_step(env):
 
     assert env._timestep == before_t + 1
     assert TimeAwareTFEnv.STATE in next_state
-    assert TimeAwareTFEnv.TIME in next_state
+    assert TimeAwareTFEnv.TIMESTEP in next_state
     assert next_state[TimeAwareTFEnv.STATE] in base_env.observation_space
