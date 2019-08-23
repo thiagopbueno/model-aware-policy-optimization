@@ -109,7 +109,7 @@ class MAPOTFCustomEnv(gym.Env):
 class TimeAwareTFEnv(MAPOTFCustomEnv):
     # pylint: disable=abstract-method,
     STATE = "state"
-    TIME = "time"
+    TIMESTEP = "timestep"
 
     def __init__(self, env, horizon=20):
         # pylint: disable=super-init-not-called
@@ -117,7 +117,10 @@ class TimeAwareTFEnv(MAPOTFCustomEnv):
         self._horizon = horizon
         self._timestep = None
         self.observation_space = gym.spaces.Dict(
-            {self.STATE: env.observation_space, self.TIME: gym.spaces.Discrete(horizon)}
+            {
+                self.STATE: env.observation_space,
+                self.TIMESTEP: gym.spaces.Discrete(horizon),
+            }
         )
         self.action_space = env.action_space
 
@@ -132,14 +135,14 @@ class TimeAwareTFEnv(MAPOTFCustomEnv):
     def step(self, action):
         next_obs, reward, done, info = self._env.step(action)
         self._timestep += 1
-        next_state = {self.STATE: next_obs, self.TIME: self._timestep}
+        next_state = {self.STATE: next_obs, self.TIMESTEP: self._timestep}
         done = done or self._timestep >= self._horizon
         return next_state, reward, done, info
 
     def reset(self):
         obs = self._env.reset()
         self._timestep = 0
-        state = {self.STATE: obs, self.TIME: self._timestep}
+        state = {self.STATE: obs, self.TIMESTEP: self._timestep}
         return state
 
     def close(self):
@@ -147,10 +150,10 @@ class TimeAwareTFEnv(MAPOTFCustomEnv):
 
     def _transition_fn(self, state, action):
         # pylint: disable=protected-access
-        state, time = state[self.STATE], state[self.TIME]
+        state, time = state[self.STATE], state[self.TIMESTEP]
         next_state, log_prob = self._env._transition_fn(state, action)
         time = time + 1
-        return {self.STATE: next_state, self.TIME: time}, log_prob
+        return {self.STATE: next_state, self.TIMESTEP: time}, log_prob
 
     def _transition_log_prob_fn(self, state, action, next_state):
         # pylint: disable=protected-access
