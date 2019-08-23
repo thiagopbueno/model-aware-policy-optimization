@@ -28,6 +28,11 @@ def get_models():
     return models
 
 
+@pytest.fixture(params=get_models())
+def model(request):
+    return request.param
+
+
 @pytest.fixture
 def linear_model():
     return get_models()[0]
@@ -86,20 +91,19 @@ def output_shape(obs_space):
 
 
 def test_linear_gaussian_layers(linear_model):
-    assert len(linear_model.layers) == 2
+    assert len(linear_model.layers) == 3
     assert not linear_model.hidden_layers
     assert isinstance(linear_model.mean_output_layer, Dense)
     assert isinstance(linear_model.log_stddev_output_layer, Dense)
 
 
 def test_nonlinear_gaussian_layers(nonlinear_model):
-    assert len(nonlinear_model.layers) == 5
+    assert len(nonlinear_model.layers) == 6
     assert len(nonlinear_model.hidden_layers) == 3
     assert isinstance(nonlinear_model.mean_output_layer, Dense)
     assert isinstance(nonlinear_model.log_stddev_output_layer, Dense)
 
 
-@pytest.mark.parametrize("model", get_models())
 def test_gaussian_output_shape(model, inputs, output_shape):
     outputs = model.call(inputs)
     assert len(outputs) == 2
@@ -116,38 +120,37 @@ def test_gaussian_output_shape(model, inputs, output_shape):
 
 
 def test_linear_gaussian_call(linear_model, inputs):
-    assert len(linear_model.layers) == 2
+    assert len(linear_model.layers) == 3
     assert not linear_model.weights
     assert not linear_model.trainable_variables
 
     _ = linear_model.call(inputs)
-    assert len(linear_model.layers) == 2
-    assert len(linear_model.weights) == 4
-    assert len(linear_model.trainable_variables) == 4
+    assert len(linear_model.layers) == 3
+    assert len(linear_model.weights) == 6
+    assert len(linear_model.trainable_variables) == 6
 
     _ = linear_model.call(inputs)
-    assert len(linear_model.layers) == 2
-    assert len(linear_model.weights) == 4
-    assert len(linear_model.trainable_variables) == 4
+    assert len(linear_model.layers) == 3
+    assert len(linear_model.weights) == 6
+    assert len(linear_model.trainable_variables) == 6
 
 
 def test_nonlinear_gaussian_call(nonlinear_model, inputs):
-    assert len(nonlinear_model.layers) == 5
+    assert len(nonlinear_model.layers) == 6
     assert not nonlinear_model.weights
     assert not nonlinear_model.trainable_variables
 
     _ = nonlinear_model.call(inputs)
-    assert len(nonlinear_model.layers) == 5
-    assert len(nonlinear_model.weights) == 10
-    assert len(nonlinear_model.trainable_variables) == 10
+    assert len(nonlinear_model.layers) == 6
+    assert len(nonlinear_model.weights) == 12
+    assert len(nonlinear_model.trainable_variables) == 12
 
     _ = nonlinear_model.call(inputs)
-    assert len(nonlinear_model.layers) == 5
-    assert len(nonlinear_model.weights) == 10
-    assert len(nonlinear_model.trainable_variables) == 10
+    assert len(nonlinear_model.layers) == 6
+    assert len(nonlinear_model.weights) == 12
+    assert len(nonlinear_model.trainable_variables) == 12
 
 
-@pytest.mark.parametrize("model", get_models())
 def test_gaussian_distribution(model, state, action):
     dist = model.dist(state, action)
     assert isinstance(dist, tfp.distributions.Normal)
@@ -155,7 +158,6 @@ def test_gaussian_distribution(model, state, action):
     assert dist.dtype == state.dtype
 
 
-@pytest.mark.parametrize("model", get_models())
 def test_gaussian_sample(model, state, action):
     next_state = model.sample(state, action)
     assert next_state.shape == state.shape
@@ -167,7 +169,6 @@ def test_gaussian_sample(model, state, action):
     assert next_state.dtype == state.dtype
 
 
-@pytest.mark.parametrize("model", get_models())
 def test_gaussian_sample_propagates_gradients(model, state, action):
     sample_shape = (10,)
     next_states = model.sample(state, action, shape=sample_shape)
@@ -175,7 +176,6 @@ def test_gaussian_sample_propagates_gradients(model, state, action):
     assert all(grad is not None for grad in grads)
 
 
-@pytest.mark.parametrize("model", get_models())
 def test_gaussian_detached_sample_blocks_gradients(model, state, action):
     sample_shape = (10,)
     next_states = tf.stop_gradient(model.sample(state, action, shape=sample_shape))
@@ -183,7 +183,6 @@ def test_gaussian_detached_sample_blocks_gradients(model, state, action):
     assert all(grad is None for grad in grads)
 
 
-@pytest.mark.parametrize("model", get_models())
 def test_gaussian_log_prob(model, state, action, batch_shape):
     next_state = model.sample(state, action)
     log_prob = model.log_prob(state, action, next_state)
@@ -195,7 +194,6 @@ def test_gaussian_log_prob(model, state, action, batch_shape):
     assert log_prob.shape == sample_shape + batch_shape
 
 
-@pytest.mark.parametrize("model", get_models())
 def test_gaussian_log_prob_sampled(model, state, action, batch_shape):
     next_state, log_prob = model.log_prob_sampled(state, action)
     assert next_state.shape == state.shape

@@ -3,20 +3,30 @@ from tensorflow import keras
 
 from mapo.models import obs_input, action_input
 from mapo.models.fcnet import build_fcnet
+from mapo.models.layers import TimeAwareObservationLayer
 
 
-def build_continuous_q_function(obs_space, action_space, config=None):
+def build_continuous_q_function(
+    obs_space, action_space, obs_embedding_dim=32, input_layer_norm=False, **kwargs
+):
     """
     Construct continuous Q function keras model.
 
     Assumes both obs_space and action_space are gym.spaces.Box instances.
     Model is called on placeholder inputs so that variables are created.
     """
-    config = config or {}
-    fc_config = dict(config, output_layer=1)
     obs = obs_input(obs_space)
     actions = action_input(action_space)
-    inputs = keras.layers.Concatenate(axis=-1)([obs, actions])
-    q_model = build_fcnet(fc_config)
-    values = q_model(inputs)
-    return keras.Model([obs, actions], values)
+
+    embedding_layer = TimeAwareObservationLayer(
+        obs_space,
+        obs_embedding_dim=obs_embedding_dim,
+        input_layer_norm=input_layer_norm,
+    )
+    fc_config = dict(kwargs, output_layer=1)
+    fc_model = build_fcnet(fc_config)
+
+    output = embedding_layer(obs)
+    output = keras.layers.Concatenate(axis=-1)([output, actions])
+    output = fc_model(output)
+    return keras.Model([obs, actions], output)

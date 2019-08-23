@@ -1,6 +1,4 @@
 """ModelV2 for MAPO."""
-
-from ray.rllib.models.preprocessors import get_preprocessor
 from ray.rllib.models.tf.tf_modelv2 import TFModelV2
 from ray.rllib.utils.annotations import override
 
@@ -33,26 +31,27 @@ class MAPOModel(TFModelV2):  # pylint: disable=abstract-method
         twin_q=False,
     ):
         # pylint: disable=too-many-arguments,arguments-differ
-        prep = get_preprocessor(obs_space)(obs_space)
         # Ignore num_outputs as we don't use a shared state preprocessor
-        super().__init__(obs_space, action_space, prep.size, model_config, name)
+        output_dim = sum(obs_space.shape)
+        super().__init__(obs_space, action_space, output_dim, model_config, name)
 
+        self.options = model_config["custom_options"]
         models = {}
         models["policy"] = build_deterministic_policy(
-            obs_space, action_space, model_config["custom_options"]["actor"]
+            obs_space, action_space, **self.options["actor"]
         )
         models["q_net"] = build_continuous_q_function(
-            obs_space, action_space, model_config["custom_options"]["critic"]
+            obs_space, action_space, **self.options["critic"]
         )
         self.twin_q = twin_q
         if twin_q:
             models["twin_q_net"] = build_continuous_q_function(
-                obs_space, action_space, model_config["custom_options"]["critic"]
+                obs_space, action_space, **self.options["critic"]
             )
 
         if create_dynamics:
             models["dynamics"] = GaussianDynamicsModel(
-                obs_space, action_space, **model_config["custom_options"]["dynamics"]
+                obs_space, action_space, **self.options["dynamics"]
             )
             # Hack to create dynamics variables on initialization
             models["dynamics"]([obs_input(obs_space), action_input(action_space)])
@@ -65,14 +64,14 @@ class MAPOModel(TFModelV2):  # pylint: disable=abstract-method
         if target_networks:
             target_models = {}
             target_models["policy"] = build_deterministic_policy(
-                obs_space, action_space, model_config["custom_options"]["actor"]
+                obs_space, action_space, **self.options["actor"]
             )
             target_models["q_net"] = build_continuous_q_function(
-                obs_space, action_space, model_config["custom_options"]["critic"]
+                obs_space, action_space, **self.options["critic"]
             )
             if twin_q:
                 target_models["twin_q_net"] = build_continuous_q_function(
-                    obs_space, action_space, model_config["custom_options"]["critic"]
+                    obs_space, action_space, **self.options["critic"]
                 )
             self.target_models = target_models
             self.register_variables(
