@@ -13,5 +13,6 @@ worker = RolloutWorker(
     policy_config={"env": "Navigation-v0"},
 )
 
-
-# worker.learn_on_batch(worker.sample())
+samples = worker.sample()
+# print("SAMPLES", samples)
+worker.learn_on_batch(samples)

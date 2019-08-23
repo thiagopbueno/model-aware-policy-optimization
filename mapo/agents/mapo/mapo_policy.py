@@ -21,6 +21,8 @@ AgentComponents = namedtuple("AgentComponents", "dynamics critic actor")
 
 def build_mapo_losses(policy, batch_tensors):
     """Contruct dynamics (MLE/PG-aware), critic (Fitted Q) and actor (MADPG) losses."""
+    # Can't alter the original batch_tensors
+    batch_tensors = {key: batch_tensors[key] for key in batch_tensors}
     for key in [SampleBatch.CUR_OBS, SampleBatch.NEXT_OBS]:
         batch_tensors[key] = restore_original_dimensions(
             batch_tensors[key], policy.observation_space
