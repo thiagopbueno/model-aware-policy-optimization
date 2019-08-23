@@ -31,8 +31,9 @@ def build_mapo_losses(policy, batch_tensors):
         )
     else:
         dynamics_loss = losses.dynamics_mle_loss(batch_tensors, model)
-    critic_loss = losses.critic_return_loss(batch_tensors, model)
+    critic_loss, critic_fetches = losses.critic_return_loss(batch_tensors, model)
     policy.loss_stats = {}
+    policy.loss_stats.update(critic_fetches)
     if not config["use_true_dynamics"]:
         policy.loss_stats["dynamics_loss"] = dynamics_loss
     policy.loss_stats["critic_loss"] = critic_loss
