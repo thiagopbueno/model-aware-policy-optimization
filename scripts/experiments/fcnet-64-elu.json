@@ -4,6 +4,6 @@
     64
   ],
   "obs_embedding_dim": 64,
-  "input_layer_norm": true,
+  "input_layer_norm": false,
   "layer_normalization": false
 }
