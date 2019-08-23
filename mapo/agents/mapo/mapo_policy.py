@@ -139,6 +139,45 @@ def compute_separate_gradients(policy, optimizer, loss):
     return dynamics_grads_and_vars + critic_grads_and_vars + actor_grads_and_vars
 
 
+def apply_gradient_n_times(sgd_iter, apply_gradient_op):
+    i0 = tf.constant(0)
+
+    def cond(i):
+        return tf.less(i, sgd_iter)
+
+    def body(i):
+        apply_gradient_op()
+        return tf.add(i, 1)
+
+    return tf.while_loop(cond, body, [i0])
+
+
+def apply_gradients_fn(policy, optimizer, grads_and_vars):
+    """Update critic, dynamics, and actor for a number of sgd iterations.
+    """
+    # pylint: disable=unused-argument
+    config = policy.config
+    global_step = policy.global_step
+    grads_and_vars = policy.all_grads_and_vars
+
+    with tf.control_dependencies([global_step.assign_add(1)]):
+        critic_op = apply_gradient_n_times(
+            config["critic_sgd_iter"],
+            lambda: optimizer.critic.apply_gradients(grads_and_vars.critic),
+        )
+
+    with tf.control_dependencies([critic_op]):
+        dynamics_op = apply_gradient_n_times(
+            config["dynamics_sgd_iter"],
+            lambda: optimizer.dynamics.apply_gradients(grads_and_vars.dynamics),
+        )
+
+    with tf.control_dependencies([dynamics_op]):
+        actor_op = optimizer.actor.apply_gradients(grads_and_vars.actor)
+
+    return tf.group(critic_op, dynamics_op, actor_op)
+
+
 def apply_gradients_with_delays(policy, optimizer, grads_and_vars):
     """
     Update actor and critic models with different frequencies.
@@ -222,6 +261,7 @@ MAPOTFPolicy = build_tf_policy(
     optimizer_fn=create_separate_optimizers,
     gradients_fn=compute_separate_gradients,
     apply_gradients_fn=apply_gradients_with_delays,
+    # apply_gradients_fn=apply_gradients_fn,
     make_model=build_mapo_network,
     action_sampler_fn=main_actor_output,
 )
