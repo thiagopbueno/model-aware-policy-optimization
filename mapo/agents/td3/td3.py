@@ -27,6 +27,9 @@ DEFAULT_CONFIG = with_common_config(
         # twin Q-net
         "twin_q": True,
         # === Optimization ===
+        # Optimizers for actor and critic networks.
+        "actor_optimizer": "Adam",
+        "critic_optimizer": "Adam",
         # Learning rate for the critic (Q-function) optimizer.
         "critic_lr": 1e-3,
         # Learning rate for the actor (policy) optimizer.

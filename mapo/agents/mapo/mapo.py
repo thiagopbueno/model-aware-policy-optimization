@@ -39,6 +39,10 @@ DEFAULT_CONFIG = with_common_config(
             },
         ),
         # === Optimization ===
+        # Optimizers for actor, critic, and dynamics networks.
+        "actor_optimizer": "Adam",
+        "critic_optimizer": "Adam",
+        "dynamics_optimizer": "Adam",
         # Learning rate for the dynamics optimizer.
         "dynamics_lr": 1e-3,
         # Learning rate for the critic (Q-function) optimizer.

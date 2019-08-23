@@ -67,13 +67,28 @@ def extra_loss_fetches(policy, _):
 def create_separate_optimizers(policy, config):
     """Initialize optimizers and global step for update operations."""
     # pylint: disable=unused-argument
-    actor_optimizer = keras.optimizers.Adam(learning_rate=config["actor_lr"])
-    critic_optimizer = keras.optimizers.Adam(learning_rate=config["critic_lr"])
+    actor_optimizer_config = {
+        "class_name": config["actor_optimizer"],
+        "config": {"learning_rate": config["actor_lr"]},
+    }
+    critic_optimizer_config = {
+        "class_name": config["critic_optimizer"],
+        "config": {"learning_rate": config["critic_lr"]},
+    }
+    actor_optimizer = keras.optimizers.get(actor_optimizer_config)
+    critic_optimizer = keras.optimizers.get(critic_optimizer_config)
+
     if config["use_true_dynamics"]:
         dynamics_optimizer = None
     else:
-        dynamics_optimizer = keras.optimizers.Adam(learning_rate=config["dynamics_lr"])
+        dynamics_optimizer_config = {
+            "class_name": config["dynamics_optimizer"],
+            "config": {"learning_rate": config["dynamics_lr"]},
+        }
+        dynamics_optimizer = keras.optimizers.get(dynamics_optimizer_config)
+
     policy.global_step = tf.Variable(0, trainable=False)
+
     return AgentComponents(
         dynamics=dynamics_optimizer, critic=critic_optimizer, actor=actor_optimizer
     )

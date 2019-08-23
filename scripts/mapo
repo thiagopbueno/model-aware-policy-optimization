@@ -110,10 +110,42 @@ def parse_args():
         help="The number of SGD optimizer iterations (defaul=80).",
     )
     optimizers_args_group.add_argument(
+        "--actor-optimizer",
+        type=str,
+        choices=[
+            "Adadelta",
+            "Adagrad",
+            "Adam",
+            "Adamax",
+            "Ftrl",
+            "Nadam",
+            "RMSprop",
+            "SGD",
+        ],
+        default="Adam",
+        help="The optimizer for the actor network (default=Adam).",
+    )
+    optimizers_args_group.add_argument(
         "--actor-lr",
         type=float,
         default=1e-3,
         help="The learning rate for the actor (policy) optimizer " "(defaul=1e-3).",
+    )
+    optimizers_args_group.add_argument(
+        "--critic-optimizer",
+        type=str,
+        choices=[
+            "Adadelta",
+            "Adagrad",
+            "Adam",
+            "Adamax",
+            "Ftrl",
+            "Nadam",
+            "RMSprop",
+            "SGD",
+        ],
+        default="Adam",
+        help="The optimizer for the critic network (default=Adam).",
     )
     optimizers_args_group.add_argument(
         "--critic-lr",
@@ -121,6 +153,22 @@ def parse_args():
         default=1e-3,
         help="The learning rate for the critic (Q-function) optimizer "
         "(defaul=1e-3).",
+    )
+    optimizers_args_group.add_argument(
+        "--dynamics-optimizer",
+        type=str,
+        choices=[
+            "Adadelta",
+            "Adagrad",
+            "Adam",
+            "Adamax",
+            "Ftrl",
+            "Nadam",
+            "RMSprop",
+            "SGD",
+        ],
+        default="Adam",
+        help="The optimizer for the dynamics model (default=Adam).",
     )
     optimizers_args_group.add_argument(
         "--dynamics-lr",
@@ -284,6 +332,8 @@ def make_config(args):
 
     # === Optimization ===
     optimization_config = {
+        "actor_optimizer": args.actor_optimizer,
+        "critic_optimizer": args.critic_optimizer,
         "actor_lr": args.actor_lr,
         "critic_lr": args.critic_lr,
         "actor_delay": args.actor_delay,
@@ -295,6 +345,7 @@ def make_config(args):
         optimization_config["critic_delay"] = args.critic_delay
 
         if not args.use_true_dynamics:
+            optimization_config["dynamics_optimizer"] = args.dynamics_optimizer
             optimization_config["dynamics_lr"] = args.dynamics_lr
 
     # === Execution ===
