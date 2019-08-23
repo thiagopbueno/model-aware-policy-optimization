@@ -91,7 +91,12 @@ def critic_return_loss(batch_tensors, model):
     )
     q_loss_criterion = keras.losses.MeanSquaredError()
     q_pred = tf.squeeze(model.compute_q_values(obs, actions))
-    return q_loss_criterion(q_pred, returns)
+    fetches = {
+        "q_mean": tf.reduce_mean(q_pred),
+        "q_max": tf.reduce_max(q_pred),
+        "q_min": tf.reduce_min(q_pred),
+    }
+    return q_loss_criterion(q_pred, returns), fetches
 
 
 def actor_dpg_loss(batch_tensors, model):

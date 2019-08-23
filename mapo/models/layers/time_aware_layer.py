@@ -3,9 +3,8 @@ import gym.spaces as spaces
 import tensorflow as tf
 from tensorflow import keras
 from ray.rllib.utils.annotations import override
-from ray.rllib.models.model import restore_original_dimensions
 
-from mapo.envs import TimeAwareTFEnv
+from mapo.envs import restore_state_tensor
 
 
 class TimeAwareObservationLayer(keras.layers.Layer):
@@ -19,17 +18,18 @@ class TimeAwareObservationLayer(keras.layers.Layer):
     """
 
     def __init__(
-        self, observation_space, obs_embedding_dim=32, input_layer_norm=False, **kwargs
+        self, observation_space, obs_embedding_dim=32, input_layer_norm=False, ignore_time=False, **kwargs
     ):
         super().__init__(**kwargs)
         self.observation_space = observation_space
         self.obs_embedding_dim = obs_embedding_dim
         self.input_layer_norm = input_layer_norm
+        self.ignore_time = ignore_time
         self.time_layer = None
 
         if (
             isinstance(self.observation_space, spaces.Dict)
-            and TimeAwareTFEnv.TIMESTEP in self.observation_space.spaces
+            and not self.ignore_time
         ):
             self.time_layer = keras.layers.Dense(
                 self.obs_embedding_dim, activation="tanh", name="time_embedding"
@@ -50,18 +50,9 @@ class TimeAwareObservationLayer(keras.layers.Layer):
             inputs (tf.Tensor or dict): Observation tensors returned from
                 ray.rllib.models.model.restore_original_dimensions
         """
-        inputs = restore_original_dimensions(
-            inputs, self.observation_space, tensorlib=tf
-        )
-        if isinstance(inputs, dict):
-            state_input, time_input = (
-                inputs[TimeAwareTFEnv.STATE],
-                inputs[TimeAwareTFEnv.TIMESTEP],
-            )
-        else:
-            state_input, time_input = inputs, None
-
+        state_input, time_input = restore_state_tensor(inputs, self.observation_space)
         state_output = state_input
+        print(type(state_output))
         for layer in self.state_layers:
             state_output = layer(state_output)
 

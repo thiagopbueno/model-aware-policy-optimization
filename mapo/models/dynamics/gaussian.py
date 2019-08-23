@@ -34,10 +34,12 @@ class GaussianDynamicsModel(keras.Model):
 
         self.config = {**kwargs}
 
-        self.embedding_layer = TimeAwareObservationLayer(
-            obs_space,
+
+        self.obs_layer = TimeAwareObservationLayer(
+            self.obs_space,
             obs_embedding_dim=self.config.get("obs_embedding_dim", 32),
             input_layer_norm=self.config.get("input_layer_norm", False),
+            ignore_time=False,
         )
 
         self.hidden_layers = []
@@ -72,8 +74,8 @@ class GaussianDynamicsModel(keras.Model):
             Tuple(tf.Tensor, tf.Tensor): A pair of tensors (mean, log_stddev).
         """
         obs, actions = inputs
-        obs_embedding = self.embedding_layer(obs)
-        inputs = keras.layers.Concatenate(axis=-1)([obs_embedding, actions])
+        obs = self.obs_layer(obs)
+        inputs = keras.layers.Concatenate(axis=-1)([obs, actions])
         for layer in self.hidden_layers:
             inputs = layer(inputs)
         outputs = (self.mean_output_layer(inputs), self.log_stddev_output_layer(inputs))
@@ -90,19 +92,30 @@ class GaussianDynamicsModel(keras.Model):
         """Returns a sample of given shape conditioned on the state
         and the action."""
         dist = self.dist(state, action)
-        return dist.sample(shape)
+        # state, time = restore_state_tensor(state, self.obs_space)
+        # time = time + 1
+        # time = tf.stack([time] * shape[0], axis=0)
+        next_state = dist.sample(shape)
+        return next_state
+        # return {TimeAwareTFEnv.STATE: next_state, TimeAwareTFEnv.TIMESTEP: time}
 
     def log_prob(self, state, action, next_state):
         """Returns the scalar log-probability for the transition given by
         (state, action, next_state)."""
+        # state, _ = restore_state_tensor(state, self.obs_space)
+        # next_state, _ = restore_state_tensor(next_state, self.obs_space)
         dist = self.dist(state, action)
         log_probs = dist.log_prob(next_state)
         log_prob = tf.reduce_sum(log_probs, axis=-1)
         return log_prob
 
     def log_prob_sampled(self, state, action, shape=()):
+        # state, time = restore_state_tensor(state, self.obs_space)
+        # time = time + 1
+        # time = tf.stack([time] * shape[0], axis=0)
         dist = self.dist(state, action)
         next_state = tf.stop_gradient(dist.sample(shape))
         log_probs = dist.log_prob(next_state)
         log_prob = tf.reduce_sum(log_probs, axis=-1)
+        # next_state = {TimeAwareTFEnv.STATE: next_state, TimeAwareTFEnv.TIMESTEP: time}
         return next_state, log_prob
