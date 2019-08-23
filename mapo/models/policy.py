@@ -29,4 +29,4 @@ def build_deterministic_policy(
     output = embedding_layer(obs)
     output = fc_model(output)
     output = action_layer(output)
-    return keras.Model(obs, output)
+    return keras.Model(inputs=obs, outputs=output)

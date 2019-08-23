@@ -177,7 +177,7 @@ def test_critic_1step_loss(batch_tensors, model_and_config_with_targets):
 
 
 def test_critic_return_loss(batch_tensors, model):
-    loss = losses.critic_return_loss(batch_tensors, model)
+    loss, _ = losses.critic_return_loss(batch_tensors, model)
 
     variables = model.critic_variables
     if model.twin_q:

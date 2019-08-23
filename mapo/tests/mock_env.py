@@ -44,10 +44,11 @@ class MockEnv(MAPOTFCustomEnv):  # pylint: disable=abstract-method
     def obs(self):
         return self._state
 
-    def _transition_fn(self, state, action):  # pylint: disable=unused-argument
+    def _transition_fn(
+        self, state, action, n_samples=1
+    ):  # pylint: disable=unused-argument
         dist = self._next_state_dist(state, action)
-        sample_shape = tf.shape(action)[:-1]
-        next_state = dist.sample(sample_shape=sample_shape)
+        next_state = dist.sample(sample_shape=(n_samples,))
         log_prob = tf.reduce_sum(dist.log_prob(tf.stop_gradient(next_state)), axis=-1)
         return next_state, log_prob
 

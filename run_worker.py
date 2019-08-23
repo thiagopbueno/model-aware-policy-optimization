@@ -7,7 +7,11 @@ from ray.rllib.evaluation import RolloutWorker
 mapo.register_all_agents()
 mapo.register_all_environments()
 
-worker = RolloutWorker(env_creator=ENVS["Navigation-v0"], policy=MAPOTFPolicy, policy_config={"env": "Navigation-v0"})
+worker = RolloutWorker(
+    env_creator=ENVS["Navigation-v0"],
+    policy=MAPOTFPolicy,
+    policy_config={"env": "Navigation-v0"},
+)
 
 
-worker.learn_on_batch(worker.sample())
+# worker.learn_on_batch(worker.sample())

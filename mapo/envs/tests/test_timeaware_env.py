@@ -36,6 +36,7 @@ def test_step(env):
     assert isinstance(info, dict)
 
     assert env._timestep == before_t + 1
-    assert TimeAwareTFEnv.STATE in next_state
-    assert TimeAwareTFEnv.TIMESTEP in next_state
-    assert next_state[TimeAwareTFEnv.STATE] in base_env.observation_space
+    assert isinstance(next_state, tuple)
+    assert len(next_state) == 2
+    assert next_state[0] in base_env.observation_space
+    assert next_state[1] in range(env.horizon + 1)

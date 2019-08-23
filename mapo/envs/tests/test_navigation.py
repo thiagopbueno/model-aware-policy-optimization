@@ -70,11 +70,11 @@ def test_sample_noise(env):
         state = tf.constant(sample_env_states(env, batch_size=batch_size))
         action = tf.constant(sample_env_actions(env, batch_size=batch_size))
         position = state + action
-        dist, next_position = env._sample_noise(position)
+        dist, next_position = env._sample_noise(position, 1)
 
         tfd = tfp.distributions
         assert isinstance(dist, tfd.MultivariateNormalFullCovariance)
-        assert next_position.shape == (batch_size,) + env._start.shape
+        assert next_position.shape == (1, batch_size) + env._start.shape
 
     with tf.Session(graph=env._graph) as sess:
         position_ = sess.run(position) + config["noise"]["mean"]
@@ -172,10 +172,11 @@ def test_transition_fn(env):
         action_ = sample_env_actions(env, batch_size)
         state = tf.constant(state_)
         action = tf.constant(action_)
-        next_state, log_prob = env._transition_fn(state, action)
-        assert state.shape == next_state.shape
+        n_samples = 1
+        next_state, log_prob = env._transition_fn(state, action, n_samples)
+        assert (n_samples,) + tuple(state.shape) == next_state.shape
         assert state.dtype == next_state.dtype
-        assert log_prob.shape == (batch_size,)
+        assert log_prob.shape == (n_samples, batch_size)
         assert log_prob.dtype == next_state.dtype
 
 
@@ -186,8 +187,9 @@ def test_transition_log_prob_fn(env):
         state = tf.constant(state_)
         action_ = sample_env_actions(env, batch_size=batch_size)
         action = tf.constant(action_)
+        n_samples = 1
 
-        next_state, log_prob = env._transition_fn(state, action)
+        next_state, log_prob = env._transition_fn(state, action, n_samples)
         log_prob_ = env._transition_log_prob_fn(state, action, next_state)
         assert log_prob_.shape == log_prob.shape
 
@@ -208,8 +210,9 @@ def test_reward_fn(env):
         state = tf.constant(state_)
         action_ = sample_env_actions(env, batch_size=batch_size)
         action = tf.constant(action_)
+        n_samples = 1
 
-        next_state, _ = env._transition_fn(state, action)
+        next_state, _ = env._transition_fn(state, action, n_samples)
         reward = env._reward_fn(state, action, next_state)
-        assert reward.shape == (batch_size,)
+        assert reward.shape == (n_samples, batch_size)
         assert reward.dtype == state.dtype

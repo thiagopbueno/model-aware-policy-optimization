@@ -4,8 +4,6 @@ import tensorflow as tf
 from tensorflow import keras
 from ray.rllib.utils.annotations import override
 
-from mapo.envs import restore_state_tensor
-
 
 class TimeAwareObservationLayer(keras.layers.Layer):
     """
@@ -18,7 +16,12 @@ class TimeAwareObservationLayer(keras.layers.Layer):
     """
 
     def __init__(
-        self, observation_space, obs_embedding_dim=32, input_layer_norm=False, ignore_time=False, **kwargs
+        self,
+        observation_space,
+        obs_embedding_dim=32,
+        input_layer_norm=False,
+        ignore_time=False,
+        **kwargs
     ):
         super().__init__(**kwargs)
         self.observation_space = observation_space
@@ -27,10 +30,7 @@ class TimeAwareObservationLayer(keras.layers.Layer):
         self.ignore_time = ignore_time
         self.time_layer = None
 
-        if (
-            isinstance(self.observation_space, spaces.Dict)
-            and not self.ignore_time
-        ):
+        if isinstance(self.observation_space, spaces.Dict) and not self.ignore_time:
             self.time_layer = keras.layers.Dense(
                 self.obs_embedding_dim, activation="tanh", name="time_embedding"
             )
@@ -50,9 +50,12 @@ class TimeAwareObservationLayer(keras.layers.Layer):
             inputs (tf.Tensor or dict): Observation tensors returned from
                 ray.rllib.models.model.restore_original_dimensions
         """
-        state_input, time_input = restore_state_tensor(inputs, self.observation_space)
+        if isinstance(inputs, (tuple, list)):
+            state_input, time_input = inputs
+        else:
+            state_input, time_input = inputs, None
+
         state_output = state_input
-        print(type(state_output))
         for layer in self.state_layers:
             state_output = layer(state_output)
 
