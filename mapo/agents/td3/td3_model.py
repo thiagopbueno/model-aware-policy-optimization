@@ -1,6 +1,4 @@
 """ModelV2 for TD3."""
-
-from ray.rllib.models.preprocessors import get_preprocessor
 from ray.rllib.models.tf.tf_modelv2 import TFModelV2
 from ray.rllib.utils.annotations import override
 
@@ -15,23 +13,24 @@ class TD3Model(TFModelV2):  # pylint: disable=abstract-method
         self, obs_space, action_space, num_outputs, model_config, name, twin_q=False
     ):
         # pylint: disable=too-many-arguments,arguments-differ
-        prep = get_preprocessor(obs_space)(obs_space)
         # Ignore num_outputs as we don't use a shared state preprocessor
-        super().__init__(obs_space, action_space, prep.size, model_config, name)
+        output_dim = sum(obs_space.shape)
+        super().__init__(obs_space, action_space, output_dim, model_config, name)
 
+        self.options = model_config["custom_options"]
         self.policy = build_deterministic_policy(
-            obs_space, action_space, model_config["custom_options"]["actor"]
+            obs_space, action_space, **self.options["actor"]
         )
         self.register_variables(self.policy.variables)
         self.q_net = build_continuous_q_function(
-            obs_space, action_space, model_config["custom_options"]["critic"]
+            obs_space, action_space, **self.options["critic"]
         )
         self.register_variables(self.q_net.variables)
 
         self.twin_q = twin_q
         if twin_q:
             self.twin_q_net = build_continuous_q_function(
-                obs_space, action_space, model_config["custom_options"]["critic"]
+                obs_space, action_space, **self.options["critic"]
             )
             self.register_variables(self.twin_q_net.variables)
 

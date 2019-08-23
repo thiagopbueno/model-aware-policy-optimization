@@ -6,6 +6,7 @@ from tensorflow.keras.layers import Dense
 import tensorflow_probability as tfp
 
 from ray.rllib.utils.annotations import override
+from mapo.models.layers import TimeAwareObservationLayer
 
 
 class GaussianDynamicsModel(keras.Model):
@@ -32,6 +33,12 @@ class GaussianDynamicsModel(keras.Model):
         self.action_space = action_space
 
         self.config = {**kwargs}
+
+        self.embedding_layer = TimeAwareObservationLayer(
+            obs_space,
+            obs_embedding_dim=self.config.get("obs_embedding_dim", 32),
+            input_layer_norm=self.config.get("input_layer_norm", False),
+        )
 
         self.hidden_layers = []
         activation = self.config.get("activation", "relu")
@@ -64,7 +71,9 @@ class GaussianDynamicsModel(keras.Model):
         Return:
             Tuple(tf.Tensor, tf.Tensor): A pair of tensors (mean, log_stddev).
         """
-        inputs = keras.layers.concatenate(inputs)
+        obs, actions = inputs
+        obs_embedding = self.embedding_layer(obs)
+        inputs = keras.layers.Concatenate(axis=-1)([obs_embedding, actions])
         for layer in self.hidden_layers:
             inputs = layer(inputs)
         outputs = (self.mean_output_layer(inputs), self.log_stddev_output_layer(inputs))
