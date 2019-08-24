@@ -26,12 +26,18 @@ def input_layer_norm(request):
     return request.param
 
 
+@pytest.fixture(params=[True, False])
+def ignore_time(request):
+    return request.param
+
+
 @pytest.fixture
-def layer_fn(input_layer_norm):
+def layer_fn(input_layer_norm, ignore_time):
     return lambda space, units=32: TimeAwareObservationLayer(
         observation_space=space,
         obs_embedding_dim=units,
         input_layer_norm=input_layer_norm,
+        ignore_time=ignore_time,
     )
 
 
@@ -49,7 +55,7 @@ def test_initialization(space, layer_fn):
     n_layers = 1
     if layer.input_layer_norm:
         n_layers += 1
-    if isinstance(space, spaces.Dict):
+    if hasattr(space, "original_space") and not layer.ignore_time:
         n_layers += 1
     assert len(layer.variables) == n_layers * 2
 

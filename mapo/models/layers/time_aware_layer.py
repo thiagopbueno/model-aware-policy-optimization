@@ -1,6 +1,5 @@
 """Custom layer for dict observations with a 'time' subspace."""
 import gym.spaces as spaces
-import tensorflow as tf
 from tensorflow import keras
 from ray.rllib.utils.annotations import override
 
@@ -30,10 +29,12 @@ class TimeAwareObservationLayer(keras.layers.Layer):
         self.ignore_time = ignore_time
         self.time_layer = None
 
-        if isinstance(self.observation_space, spaces.Dict) and not self.ignore_time:
-            self.time_layer = keras.layers.Dense(
-                self.obs_embedding_dim, activation="tanh", name="time_embedding"
-            )
+        if hasattr(self.observation_space, "original_space"):
+            original_space = self.observation_space.original_space
+            if isinstance(original_space, spaces.Tuple) and not self.ignore_time:
+                self.time_layer = keras.layers.Dense(
+                    self.obs_embedding_dim, activation="tanh", name="time_embedding"
+                )
 
         self.state_layers = []
         if self.input_layer_norm:
@@ -71,6 +72,7 @@ class TimeAwareObservationLayer(keras.layers.Layer):
             "observation_space": self.observation_space,
             "obs_embedding_dim": self.obs_embedding_dim,
             "input_layer_norm": self.input_layer_norm,
+            "ignore_time": self.ignore_time,
         }
         base_config = super().get_config()
         return {**base_config, **config}
