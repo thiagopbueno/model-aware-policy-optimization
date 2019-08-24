@@ -34,7 +34,7 @@ def test_checkpoint_restore(tmpdir, trainer_cls, env_name, env_creator):
         agent1.train()
     agent2.restore(agent1.save(tmpdir))
 
-    obs = env_creator().observation_space.sample()
+    obs = env_creator(env_name).observation_space.sample()
     mean_action1 = get_mean_action(agent1, obs)
     mean_action2 = get_mean_action(agent2, obs)
     assert abs(mean_action1 - mean_action2) <= 0.1

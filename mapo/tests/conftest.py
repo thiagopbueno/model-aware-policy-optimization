@@ -18,8 +18,8 @@ def env_name():
 
 
 @pytest.fixture(scope="session")
-def env_creator(env_name):
-    return _global_registry.get(ENV_CREATOR, env_name)
+def env_creator():
+    return lambda name, config=None: _global_registry.get(ENV_CREATOR, name)(config)
 
 
 @pytest.fixture

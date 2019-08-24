@@ -1,6 +1,4 @@
 # pylint: disable=missing-docstring, redefined-outer-name
-import itertools
-
 import pytest
 from gym.spaces import Box
 import numpy as np
@@ -12,7 +10,8 @@ from ray.rllib.models.catalog import ModelCatalog
 from mapo.agents.mapo.mapo_model import MAPOModel
 
 
-def get_spaces():
+@pytest.fixture
+def spaces():
     return (
         Box(-np.inf, np.inf, shape=(2,), dtype=np.float32),
         # Action range must be limited so as to not break ActionSquashingLayer
@@ -20,41 +19,75 @@ def get_spaces():
     )
 
 
-def get_models():
-    obs_space, action_space = get_spaces()
-    model_config = {
+@pytest.fixture
+def model_config():
+    return {
         "custom_options": {
             "actor": {"activation": "relu", "layers": [32, 32]},
             "critic": {"activation": "relu", "layers": [32, 32]},
             "dynamics": {"activation": "relu", "layers": [32, 32]},
         }
     }
-    models = [
-        MAPOModel(
-            obs_space,
-            action_space,
-            1,
-            model_config,
-            "test_model",
-            target_networks=build_targets,
-            twin_q=build_twin,
-        )
-        for build_targets, build_twin in itertools.product([True, False], [True, False])
-    ]
-    return models
 
 
-def get_models_with_targets():
-    return [model for model in get_models() if hasattr(model, "target_models")]
+@pytest.fixture(params=[True, False])
+def build_targets(request):
+    return request.param
 
 
-def get_models_with_twin_qs():
-    return [model for model in get_models() if model.twin_q]
+@pytest.fixture(params=[True, False])
+def build_twin(request):
+    return request.param
 
 
 @pytest.fixture
-def input_dict():
-    obs_space, action_space = get_spaces()
+def model(spaces, model_config, build_targets, build_twin):
+    obs_space, action_space = spaces
+    model = MAPOModel(
+        obs_space,
+        action_space,
+        1,
+        model_config,
+        "test_model",
+        target_networks=build_targets,
+        twin_q=build_twin,
+    )
+    return model
+
+
+@pytest.fixture
+def model_with_targets(spaces, model_config, build_twin):
+    obs_space, action_space = spaces
+    model = MAPOModel(
+        obs_space,
+        action_space,
+        1,
+        model_config,
+        "test_model",
+        target_networks=True,
+        twin_q=build_twin,
+    )
+    return model
+
+
+@pytest.fixture
+def model_with_twins(spaces, model_config, build_targets):
+    obs_space, action_space = spaces
+    model = MAPOModel(
+        obs_space,
+        action_space,
+        1,
+        model_config,
+        "test_model",
+        target_networks=build_targets,
+        twin_q=True,
+    )
+    return model
+
+
+@pytest.fixture
+def input_dict(spaces):
+    obs_space, action_space = spaces
     obs = tf.compat.v1.placeholder(
         tf.float32, shape=[None] + list(obs_space.shape), name="observation"
     )
@@ -71,25 +104,23 @@ def input_dict():
 
 
 @pytest.fixture
-def obs_ph():
-    obs_space, _ = get_spaces()
+def obs_ph(spaces):
+    obs_space, _ = spaces
     return tf.compat.v1.placeholder(
         tf.float32, shape=[None] + list(obs_space.shape), name="observation"
     )
 
 
 @pytest.fixture
-def action_ph():
-    _, action_space = get_spaces()
+def action_ph(spaces):
+    _, action_space = spaces
     return ModelCatalog.get_action_placeholder(action_space)
 
 
-@pytest.mark.parametrize("model", get_models())
 def test_variables_are_created_on_init(model):
     assert model.variables()
 
 
-@pytest.mark.parametrize("model", get_models())
 def test_component_variables_are_in_all_variables(model):
     all_variables = set(model.variables())
     actor_vars = set(model.actor_variables)
@@ -100,13 +131,11 @@ def test_component_variables_are_in_all_variables(model):
     assert dynamics_vars and dynamics_vars.issubset(all_variables)
 
 
-@pytest.mark.parametrize("model", get_models())
 def test_output_is_flattened_obs(model, input_dict):
     model_out, _ = model(input_dict, [], None)
     assert model_out.shape[1:] == model.obs_space.shape
 
 
-@pytest.mark.parametrize("model", get_models())
 def test_compute_action(model, obs_ph, action_ph):
     actions = model.compute_actions(obs_ph)
     assert actions.shape[1:] == action_ph.shape[1:]
@@ -122,7 +151,6 @@ def test_compute_action(model, obs_ph, action_ph):
     assert set(filtered_all_vars) == set(filtered_actor_vars)
 
 
-@pytest.mark.parametrize("model", get_models())
 def test_compute_q_values(model, obs_ph, action_ph):
     values = model.compute_q_values(obs_ph, action_ph)
     assert values.shape[1:] == (1,)
@@ -140,7 +168,6 @@ def test_compute_q_values(model, obs_ph, action_ph):
     assert set(filtered_all_vars) == set(filtered_critic_vars)
 
 
-@pytest.mark.parametrize("model", get_models())
 def test_sample_next_states(model, obs_ph, action_ph):
     states = model.sample_next_states(obs_ph, action_ph)
     assert states.shape[1:] == obs_ph.shape[1:]
@@ -158,8 +185,8 @@ def test_sample_next_states(model, obs_ph, action_ph):
     assert set(filtered_all_vars) == set(filtered_dynamics_vars)
 
 
-@pytest.mark.parametrize("model", get_models_with_targets())
-def test_uses_target_models(model, obs_ph, action_ph):
+def test_uses_target_models(model_with_targets, obs_ph, action_ph):
+    model = model_with_targets
     actions = model.compute_actions(obs_ph, target=True)
     assert actions.shape[1:] == action_ph.shape[1:]
     assert all(
@@ -175,8 +202,8 @@ def test_uses_target_models(model, obs_ph, action_ph):
     )
 
 
-@pytest.mark.parametrize("model", get_models_with_twin_qs())
-def test_creates_twin_q_vars(model):
+def test_creates_twin_q_vars(model_with_twins):
+    model = model_with_twins
     critic_vars = model.critic_variables
     q_vars, twin_q_vars = (
         critic_vars[: len(critic_vars)],

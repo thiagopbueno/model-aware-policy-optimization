@@ -118,8 +118,8 @@ def model(model_and_config):
 
 
 @pytest.fixture
-def env(env_creator):
-    return env_creator()
+def env(env_name, env_creator):
+    return env_creator(env_name)
 
 
 def assert_consistent_shapes_and_grads(loss, variables):

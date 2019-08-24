@@ -6,8 +6,8 @@ from mapo.envs import TimeAwareTFEnv
 
 
 @pytest.fixture
-def env(env_creator):
-    env = TimeAwareTFEnv(env_creator(), horizon=20)
+def env(env_name, env_creator):
+    env = TimeAwareTFEnv(env_creator(env_name), horizon=20)
     env.reset()
     return env
 

@@ -8,11 +8,16 @@ from mapo.agents.td3.td3_policy import TD3TFPolicy
 
 
 @pytest.fixture
-def worker(env_creator, env_name):
+def policy_config():
+    return lambda env_name: {"policy_delay": 3, "env": env_name}
+
+
+@pytest.fixture
+def worker(env_name, env_creator, policy_config):
     return RolloutWorker(
-        env_creator=env_creator,
+        env_creator=lambda _: env_creator(env_name),
         policy=TD3TFPolicy,
-        policy_config={"policy_delay": 2, "env": env_name},
+        policy_config=policy_config(env_name),
     )
 
 
