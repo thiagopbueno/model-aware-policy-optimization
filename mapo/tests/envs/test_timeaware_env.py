@@ -25,6 +25,7 @@ def test_reset(env):
     state, time = env.reset()
     assert time == 0
     assert state in env.unwrapped.observation_space
+    assert np.allclose(state, env.unwrapped._state)
 
 
 def test_step(env):
@@ -39,5 +40,6 @@ def test_step(env):
     assert isinstance(next_state, tuple)
     assert len(next_state) == 2
     assert next_state[0] in base_env.observation_space
+    assert np.allclose(next_state[0], base_env._state)
     assert next_state[1] in range(env.horizon + 1)
     assert next_state[1] == before_t + 1
