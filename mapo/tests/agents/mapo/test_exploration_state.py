@@ -16,10 +16,10 @@ def policy_config():
     }
 
 
-def test_deterministic_evaluation(env_name, env_creator, policy_config):
+def test_deterministic_evaluation(env_name, env_creator, spaces, policy_config):
     policy_config = policy_config(env_name)
     env = env_creator(env_name, config=policy_config["env_config"])
-    ob_space, ac_space = env.observation_space, env.action_space
+    ob_space, ac_space = spaces(env)
     policy = OffMAPOTFPolicy(ob_space, ac_space, policy_config)
 
     obs = ob_space.sample()
@@ -31,10 +31,10 @@ def test_deterministic_evaluation(env_name, env_creator, policy_config):
 
 @pytest.mark.skip
 @pytest.mark.slow
-def test_pure_exploration(env_name, env_creator, policy_config):
+def test_pure_exploration(env_name, env_creator, spaces, policy_config):
     policy_config = policy_config(env_name)
     env = env_creator(env_name, config=policy_config["env_config"])
-    ob_space, ac_space = env.observation_space, env.action_space
+    ob_space, ac_space = spaces(env)
     policy = OffMAPOTFPolicy(ob_space, ac_space, policy_config(env_name))
     policy.set_pure_exploration_phase(True)
 
@@ -54,14 +54,15 @@ def test_pure_exploration(env_name, env_creator, policy_config):
 
 @pytest.mark.skip
 @pytest.mark.slow
-def test_iid_gaussian_exploration(env_name, env_creator, policy_config):
+def test_iid_gaussian_exploration(env_name, env_creator, spaces, policy_config):
     policy_config = policy_config(env_name)
     env = env_creator(env_name, config=policy_config["env_config"])
     policy_config["exploration_noise_type"] = "gaussian"
     policy_config["exploration_gaussian_sigma"] = 0.5
-    policy = OffMAPOTFPolicy(env.observation_space, env.action_space, policy_config)
+    ob_space, ac_space = spaces(env)
+    policy = OffMAPOTFPolicy(ob_space, ac_space, policy_config)
 
-    obs = env.observation_space.sample()[None]
+    obs = ob_space.sample()[None]
     policy.evaluate(True)
     loc = np.squeeze(policy.compute_single_action(obs[0], [])[0])
     policy.evaluate(False)

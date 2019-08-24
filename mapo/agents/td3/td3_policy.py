@@ -6,6 +6,7 @@ from gym.spaces import Box
 from ray.rllib.policy import build_tf_policy
 from ray.rllib.policy.sample_batch import SampleBatch
 from ray.rllib.models.catalog import ModelCatalog
+from ray.rllib.models.model import restore_original_dimensions
 from ray.rllib.utils.error import UnsupportedSpaceException
 
 
@@ -78,6 +79,16 @@ def _build_actor_loss(policy, batch_tensors):
 
 def build_actor_critic_losses(policy, batch_tensors):
     """Contruct actor (DPG) and critic (Fitted Q) losses."""
+    # Can't alter the original batch_tensors
+    # RLlib tracks which keys have been accessed in batch_tensors. Then, at runtime it
+    # feeds each corresponding value its respective sample batch array. If we alter
+    # a dictionary field by restoring dimensions, the new value might be a tuple or
+    # dict, which can't be fed an array when calling the session later.
+    batch_tensors = {key: batch_tensors[key] for key in batch_tensors}
+    for key in [SampleBatch.CUR_OBS, SampleBatch.NEXT_OBS]:
+        batch_tensors[key] = restore_original_dimensions(
+            batch_tensors[key], policy.observation_space
+        )
     policy.loss_stats = {}
     policy.critic_loss = _build_critic_loss(policy, batch_tensors)
     policy.actor_loss = _build_actor_loss(policy, batch_tensors)
@@ -207,7 +218,9 @@ def copy_targets(policy, obs_space, action_space, config):
 def build_action_sampler(policy, model, input_dict, obs_space, action_space, config):
     """Add exploration noise when not evaluating the policy."""
     # pylint: disable=too-many-arguments,unused-argument
-    deterministic_actions = model.get_actions(input_dict[SampleBatch.CUR_OBS])
+    deterministic_actions = model.get_actions(
+        restore_original_dimensions(input_dict[SampleBatch.CUR_OBS], obs_space)
+    )
     policy.evaluating = tf.placeholder(tf.bool, shape=[])
     policy.pure_exploration_phase = tf.placeholder(tf.bool, shape=[])
 

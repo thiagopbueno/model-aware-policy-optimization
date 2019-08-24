@@ -22,6 +22,10 @@ AgentComponents = namedtuple("AgentComponents", "dynamics critic actor")
 def build_mapo_losses(policy, batch_tensors):
     """Contruct dynamics (MLE/PG-aware), critic (Fitted Q) and actor (MADPG) losses."""
     # Can't alter the original batch_tensors
+    # RLlib tracks which keys have been accessed in batch_tensors. Then, at runtime it
+    # feeds each corresponding value its respective sample batch array. If we alter
+    # a dictionary field by restoring dimensions, the new value might be a tuple or
+    # dict, which can't be fed an array when calling the session later.
     batch_tensors = {key: batch_tensors[key] for key in batch_tensors}
     for key in [SampleBatch.CUR_OBS, SampleBatch.NEXT_OBS]:
         batch_tensors[key] = restore_original_dimensions(
