@@ -1,5 +1,6 @@
 """Custom layer for dict observations with a 'time' subspace."""
 import gym.spaces as spaces
+import tensorflow as tf
 from tensorflow import keras
 from ray.rllib.utils.annotations import override
 
@@ -29,9 +30,11 @@ class TimeAwareObservationLayer(keras.layers.Layer):
         self.ignore_time = ignore_time
         self.time_layer = None
 
-        if hasattr(self.observation_space, "original_space"):
-            original_space = self.observation_space.original_space
-            if isinstance(original_space, spaces.Tuple) and not self.ignore_time:
+        self.obs_shape = self.observation_space.shape
+        original_space = getattr(self.observation_space, "original_space", None)
+        if original_space is not None and isinstance(original_space, spaces.Tuple):
+            self.obs_shape = original_space.spaces[0].shape
+            if not self.ignore_time:
                 self.time_layer = keras.layers.Dense(
                     self.obs_embedding_dim, activation="tanh", name="time_embedding"
                 )
@@ -56,9 +59,14 @@ class TimeAwareObservationLayer(keras.layers.Layer):
         else:
             state_input, time_input = inputs, None
 
-        state_output = state_input
+        batch_shape = tf.shape(state_input)[:-1]
+        state_output = tf.reshape(state_input, (-1,) + self.obs_shape)
         for layer in self.state_layers:
             state_output = layer(state_output)
+        state_output = tf.reshape(
+            state_output,
+            tf.concat([batch_shape, tf.constant([self.obs_embedding_dim])], axis=0),
+        )
 
         if time_input is not None and self.time_layer is not None:
             time_output = self.time_layer(time_input)
