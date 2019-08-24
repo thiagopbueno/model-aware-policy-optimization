@@ -110,6 +110,18 @@ def parse_args():
         help="The number of SGD optimizer iterations (defaul=80).",
     )
     optimizers_args_group.add_argument(
+        "--critic-sgd-iter",
+        type=int,
+        default=80,
+        help="The number of SGD optimizer iterations for the critic (defaul=80).",
+    )
+    optimizers_args_group.add_argument(
+        "--dynamics-sgd-iter",
+        type=int,
+        default=80,
+        help="The number of SGD optimizer iterations for the dynamics (defaul=80).",
+    )
+    optimizers_args_group.add_argument(
         "--actor-optimizer",
         type=str,
         choices=[
@@ -355,10 +367,12 @@ def make_config(args):
         optimization_config["optimizer"] = {"num_sgd_iter": args.num_sgd_iter}
 
     if args.run in ["MAPO", "OffMAPO"]:
+        optimization_config["critic_sgd_iter"] = args.critic_sgd_iter
         optimization_config["critic_delay"] = args.critic_delay
 
         if not args.use_true_dynamics:
             optimization_config["dynamics_optimizer"] = args.dynamics_optimizer
+            optimization_config["dynamics_sgd_iter"] = args.dynamics_sgd_iter
             optimization_config["dynamics_lr"] = args.dynamics_lr
 
     # === Execution ===

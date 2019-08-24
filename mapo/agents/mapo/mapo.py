@@ -43,6 +43,9 @@ DEFAULT_CONFIG = with_common_config(
         "actor_optimizer": "Adam",
         "critic_optimizer": "Adam",
         "dynamics_optimizer": "Adam",
+        # Number of updates for critic and dynamics for each actor update.
+        "critic_sgd_iter": 80,
+        "dynamics_sgd_iter": 80,
         # Learning rate for the dynamics optimizer.
         "dynamics_lr": 1e-3,
         # Learning rate for the critic (Q-function) optimizer.
