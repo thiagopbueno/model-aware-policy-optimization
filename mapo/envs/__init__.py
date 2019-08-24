@@ -116,17 +116,16 @@ class MAPOTFCustomEnv(gym.Env):
 
 
 class TimeAwareTFEnv(MAPOTFCustomEnv):
-    # pylint: disable=abstract-method,
-
     def __init__(self, env, horizon=20):
         # pylint: disable=super-init-not-called
         self._env = env
         self._horizon = horizon
-        self._timestep = None
+
+        self._state = None
+
         self.observation_space = gym.spaces.Tuple(
             (env.observation_space, gym.spaces.Discrete(horizon + 1))
         )
-        self._prep = ModelCatalog.get_preprocessor_for_space(self.observation_space)
         self.action_space = env.action_space
 
     @property
@@ -137,21 +136,19 @@ class TimeAwareTFEnv(MAPOTFCustomEnv):
     def horizon(self):
         return self._horizon
 
-    def step(self, action):
-        next_obs, reward, done, info = self._env.step(action)
-        self._timestep += 1
-        next_state = (next_obs, self._timestep)
-        done = done or self._timestep >= self._horizon
-        return next_state, reward, done, info
-
-    def reset(self):
-        obs = self._env.reset()
-        self._timestep = 0
-        state = (obs, self._timestep)
-        return state
+    def render(self, mode="human"):
+        pass
 
     def close(self):
         self._env.close()
+
+    @property
+    def start_state(self):
+        return self._env.start_state, 0
+
+    @property
+    def obs(self):
+        return self._state
 
     def _transition_fn(self, state, action, n_samples=1):
         # pylint: disable=protected-access
@@ -173,6 +170,25 @@ class TimeAwareTFEnv(MAPOTFCustomEnv):
         next_state, _ = next_state
         reward = self._env._reward_fn(state, action, next_state)
         return reward
+
+    def _terminal(self):
+        # pylint: disable=protected-access
+        return self._env._terminal() or self._state[1] >= self._horizon
+
+    def _info(self):
+        return self._env._info()  # pylint: disable=protected-access
+
+    def _transition(self, state, action):
+        # pylint: disable=protected-access
+        state, time = state
+        next_state, log_prob = self._env._transition(state, action)
+        return (next_state, time + 1), log_prob
+
+    def _reward(self, state, action, next_state):
+        # pylint: disable=protected-access
+        state, _ = state
+        next_state, _ = next_state
+        return self._env._reward(state, action, next_state)
 
 
 def increment_one_hot_time(time, n_samples):

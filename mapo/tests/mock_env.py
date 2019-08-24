@@ -4,7 +4,7 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 from gym.spaces import Box
 
-from mapo.envs import MAPOTFCustomEnv
+from mapo.envs import MAPOTFCustomEnv, TimeAwareTFEnv
 
 
 _DEFAULT_CONFIG = {
@@ -15,8 +15,8 @@ _DEFAULT_CONFIG = {
 }
 
 
-class MockEnv(MAPOTFCustomEnv):  # pylint: disable=abstract-method
-    """Dummy environment with continuous action space."""
+class MockEnv(MAPOTFCustomEnv):
+    """Dummy environment implementing the MAPOTFCustomEnv interface."""
 
     def __init__(self, config=None):
         config = config or {}
@@ -75,3 +75,13 @@ class MockEnv(MAPOTFCustomEnv):  # pylint: disable=abstract-method
 
     def _info(self):
         return {}
+
+    def render(self, mode="human"):
+        pass
+
+
+class TimeAwareMockEnv(TimeAwareTFEnv):
+    """Wrapped mock environment implementing the TimeAwareTFEnv interface."""
+
+    def __init__(self, config=None):
+        super().__init__(MockEnv(config), horizon=20)

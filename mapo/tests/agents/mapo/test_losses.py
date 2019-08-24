@@ -5,6 +5,7 @@ from ray.rllib.models.catalog import ModelCatalog
 from ray.rllib.policy.sample_batch import SampleBatch
 from ray.rllib.evaluation.postprocessing import Postprocessing
 from ray.rllib.utils.tracking_dict import UsageTrackingDict
+from ray.rllib.models.model import restore_original_dimensions
 
 
 import mapo.agents.mapo.losses as losses
@@ -12,28 +13,36 @@ from mapo.agents.mapo import MAPOModel
 
 
 @pytest.fixture
-def batch_tensors(spaces):
-    obs_space, action_space = spaces
-    obs = tf.compat.v1.placeholder(
-        tf.float32, shape=[None] + list(obs_space.shape), name="observation"
-    )
-    actions = ModelCatalog.get_action_placeholder(action_space)
-    rewards = tf.compat.v1.placeholder(tf.float32, [None], name="reward")
-    dones = tf.compat.v1.placeholder(tf.bool, [None], name="done")
-    next_obs = tf.compat.v1.placeholder(
-        tf.float32, shape=[None] + list(obs_space.shape), name="next_observation"
-    )
-    returns = tf.compat.v1.placeholder(tf.float32, [None], name="return")
-    return UsageTrackingDict(
-        {
-            SampleBatch.CUR_OBS: obs,
-            SampleBatch.ACTIONS: actions,
-            SampleBatch.REWARDS: rewards,
-            SampleBatch.DONES: dones,
-            SampleBatch.NEXT_OBS: next_obs,
-            Postprocessing.ADVANTAGES: returns,
-        }
-    )
+def env(env_name, env_creator):
+    return env_creator(env_name)
+
+
+@pytest.fixture
+def batch_tensors_fn(spaces):
+    def get_batch_tensors(env):
+        obs_space, action_space = spaces(env)
+        obs = tf.compat.v1.placeholder(
+            tf.float32, shape=[None] + list(obs_space.shape), name="observation"
+        )
+        actions = ModelCatalog.get_action_placeholder(action_space)
+        rewards = tf.compat.v1.placeholder(tf.float32, [None], name="reward")
+        dones = tf.compat.v1.placeholder(tf.bool, [None], name="done")
+        next_obs = tf.compat.v1.placeholder(
+            tf.float32, shape=[None] + list(obs_space.shape), name="next_observation"
+        )
+        returns = tf.compat.v1.placeholder(tf.float32, [None], name="return")
+        return UsageTrackingDict(
+            {
+                SampleBatch.CUR_OBS: restore_original_dimensions(obs, obs_space),
+                SampleBatch.ACTIONS: actions,
+                SampleBatch.REWARDS: rewards,
+                SampleBatch.DONES: dones,
+                SampleBatch.NEXT_OBS: restore_original_dimensions(next_obs, obs_space),
+                Postprocessing.ADVANTAGES: returns,
+            }
+        )
+
+    return get_batch_tensors
 
 
 @pytest.fixture
@@ -45,11 +54,6 @@ def model_config():
             "dynamics": {"activation": "relu", "layers": [32, 32]},
         }
     }
-
-
-@pytest.fixture(params=[True, False])
-def target_networks(request):
-    return request.param
 
 
 @pytest.fixture(params=[True, False])
@@ -82,44 +86,43 @@ def config(model_config, twin_q, smooth_target_policy):
     }
 
 
+@pytest.fixture(params=[True, False])
+def target_networks(request):
+    return request.param
+
+
 @pytest.fixture
-def model_and_config_fn():
-    def make_model_and_config(spaces, target_networks, config):
-        obs_space, action_space = spaces
-        return (
-            MAPOModel(
-                obs_space,
-                action_space,
-                1,
-                model_config=config["model_config"],
-                name="mapo_model",
-                target_networks=target_networks,
-                twin_q=config["twin_q"],
-            ),
-            config,
+def model_fn(spaces, target_networks):
+    def make_model(env, config):
+        obs_space, action_space = spaces(env)
+        return MAPOModel(
+            obs_space,
+            action_space,
+            1,
+            model_config=config["model_config"],
+            name="mapo_model",
+            target_networks=target_networks,
+            twin_q=config["twin_q"],
         )
 
-    return make_model_and_config
+    return make_model
 
 
 @pytest.fixture
-def model_and_config(model_and_config_fn, spaces, target_networks, config):
-    return model_and_config_fn(spaces, target_networks, config)
+def model_with_targets_fn(spaces):
+    def make_model_with_targets(env, config):
+        obs_space, action_space = spaces(env)
+        return MAPOModel(
+            obs_space,
+            action_space,
+            1,
+            model_config=config["model_config"],
+            name="mapo_model",
+            target_networks=True,
+            twin_q=config["twin_q"],
+        )
 
-
-@pytest.fixture
-def model_and_config_with_targets(model_and_config_fn, spaces, config):
-    return model_and_config_fn(spaces, True, config)
-
-
-@pytest.fixture
-def model(model_and_config):
-    return model_and_config[0]
-
-
-@pytest.fixture
-def env(env_name, env_creator):
-    return env_creator(env_name)
+    return make_model_with_targets
 
 
 def assert_consistent_shapes_and_grads(loss, variables):
@@ -131,7 +134,9 @@ def assert_consistent_shapes_and_grads(loss, variables):
     )
 
 
-def test_dynamics_mle_loss(batch_tensors, model):
+def test_dynamics_mle_loss(env, config, model_fn, batch_tensors_fn):
+    model = model_fn(env, config)
+    batch_tensors = batch_tensors_fn(env)
     loss = losses.dynamics_mle_loss(batch_tensors, model)
     variables = model.dynamics_variables
 
@@ -141,8 +146,9 @@ def test_dynamics_mle_loss(batch_tensors, model):
     assert SampleBatch.NEXT_OBS in batch_tensors.accessed_keys
 
 
-def test_dynamics_pga_loss(batch_tensors, env, model_and_config):
-    model, config = model_and_config
+def test_dynamics_pga_loss(env, config, model_fn, batch_tensors_fn):
+    model = model_fn(env, config)
+    batch_tensors = batch_tensors_fn(env)
     actor_loss = losses.actor_model_aware_loss(batch_tensors, model, env, config)
     batch_tensors = UsageTrackingDict(batch_tensors)
     loss = losses.dynamics_pga_loss(batch_tensors, model, actor_loss, config)
@@ -152,9 +158,10 @@ def test_dynamics_pga_loss(batch_tensors, env, model_and_config):
     assert SampleBatch.CUR_OBS in batch_tensors.accessed_keys
 
 
-def test_build_critic_targets(batch_tensors, model_and_config_with_targets):
+def test_build_critic_targets(env, config, model_with_targets_fn, batch_tensors_fn):
     # pylint: disable=protected-access
-    model, config = model_and_config_with_targets
+    model = model_with_targets_fn(env, config)
+    batch_tensors = batch_tensors_fn(env)
     targets = losses._build_critic_targets(batch_tensors, model, config)
     target_vars = [targ for main, targ in model.main_and_target_variables]
 
@@ -166,8 +173,9 @@ def test_build_critic_targets(batch_tensors, model_and_config_with_targets):
     assert SampleBatch.NEXT_OBS in batch_tensors.accessed_keys
 
 
-def test_critic_1step_loss(batch_tensors, model_and_config_with_targets):
-    model, config = model_and_config_with_targets
+def test_critic_1step_loss(env, config, model_with_targets_fn, batch_tensors_fn):
+    model = model_with_targets_fn(env, config)
+    batch_tensors = batch_tensors_fn(env)
     loss, _ = losses.critic_1step_loss(batch_tensors, model, config)
     variables = model.critic_variables
 
@@ -176,7 +184,9 @@ def test_critic_1step_loss(batch_tensors, model_and_config_with_targets):
     assert SampleBatch.ACTIONS in batch_tensors.accessed_keys
 
 
-def test_critic_return_loss(batch_tensors, model):
+def test_critic_return_loss(env, config, model_fn, batch_tensors_fn):
+    model = model_fn(env, config)
+    batch_tensors = batch_tensors_fn(env)
     loss, _ = losses.critic_return_loss(batch_tensors, model)
 
     variables = model.critic_variables
@@ -189,7 +199,9 @@ def test_critic_return_loss(batch_tensors, model):
     assert Postprocessing.ADVANTAGES in batch_tensors.accessed_keys
 
 
-def test_actor_dpg_loss(batch_tensors, model):
+def test_actor_dpg_loss(env, config, model_fn, batch_tensors_fn):
+    model = model_fn(env, config)
+    batch_tensors = batch_tensors_fn(env)
     loss = losses.actor_dpg_loss(batch_tensors, model)
     variables = model.actor_variables
 
@@ -198,9 +210,10 @@ def test_actor_dpg_loss(batch_tensors, model):
 
 
 def test_actor_model_aware_loss(
-    batch_tensors, env, model_and_config, use_true_dynamics
+    use_true_dynamics, env, config, model_fn, batch_tensors_fn
 ):
-    model, config = model_and_config
+    model = model_fn(env, config)
+    batch_tensors = batch_tensors_fn(env)
     config["use_true_dynamics"] = use_true_dynamics
     loss = losses.actor_model_aware_loss(batch_tensors, model, env, config)
     variables = model.actor_variables
