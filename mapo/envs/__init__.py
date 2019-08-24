@@ -128,6 +128,10 @@ class TimeAwareTFEnv(MAPOTFCustomEnv):
         )
         self.action_space = env.action_space
 
+    def reset(self):
+        self._state = self._env.reset(), 0
+        return self.obs
+
     @property
     def unwrapped(self):
         return self._env
@@ -182,6 +186,7 @@ class TimeAwareTFEnv(MAPOTFCustomEnv):
         # pylint: disable=protected-access
         state, time = state
         next_state, log_prob = self._env._transition(state, action)
+        self._env._state = next_state
         return (next_state, time + 1), log_prob
 
     def _reward(self, state, action, next_state):
