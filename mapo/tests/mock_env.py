@@ -21,12 +21,14 @@ class MockEnv(MAPOTFCustomEnv):  # pylint: disable=abstract-method
     def __init__(self, config=None):
         config = config or {}
         self.config = {**_DEFAULT_CONFIG, **config}
+
         self.observation_space = Box(low=-1, high=1, shape=(4,), dtype=np.float32)
         action_dim = self.config["action_dim"]
         low, high = self.config["action_low"], self.config["action_high"]
         self.action_space = Box(
             low=low, high=high, shape=(action_dim,), dtype=np.float32
         )
+
         super().__init__(self.observation_space.shape, self.action_space.shape)
         self.next_state = (
             self.observation_space.sample() if self.config["fixed_state"] else None

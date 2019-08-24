@@ -5,23 +5,25 @@ from ray.rllib.evaluation import RolloutWorker
 
 
 @pytest.fixture
-def policy_config(env_name):
-    return {"actor_delay": 3, "critic_delay": 2, "env": env_name}
+def policy_config():
+    return lambda env_name: {"actor_delay": 3, "critic_delay": 2, "env": env_name}
 
 
 @pytest.fixture
-def worker(env_creator, policy_cls, policy_config):
+def worker(env_name, env_creator, policy_cls, policy_config):
     return RolloutWorker(
-        env_creator=env_creator, policy=policy_cls, policy_config=policy_config
+        env_creator=lambda _: env_creator(env_name),
+        policy=policy_cls,
+        policy_config=policy_config(env_name),
     )
 
 
 @pytest.fixture
-def worker_with_targets(env_creator, policy_cls_with_targets, policy_config):
+def worker_with_targets(env_name, env_creator, policy_cls_with_targets, policy_config):
     return RolloutWorker(
-        env_creator=env_creator,
+        env_creator=lambda _: env_creator(env_name),
         policy=policy_cls_with_targets,
-        policy_config=policy_config,
+        policy_config=policy_config(env_name),
     )
 
 

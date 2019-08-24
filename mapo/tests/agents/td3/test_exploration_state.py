@@ -3,29 +3,27 @@
 import pytest
 import numpy as np
 import scipy.stats as stats
-from ray.rllib.evaluation import RolloutWorker
 
 from mapo.agents.td3.td3_policy import TD3TFPolicy
 
 
 @pytest.fixture
-def policy_config(env_name):
-    return {
+def policy_config():
+    return lambda env_name: {
         "env": env_name,
         # Expand bounds so that almost no distribution samples are clipped to range
         "env_config": {"action_dim": 1, "action_low": -100, "action_high": 100},
     }
 
 
-def test_deterministic_evaluation(env_creator, policy_config):
-    worker = RolloutWorker(env_creator, TD3TFPolicy, policy_config=policy_config)
-    policy = worker.get_policy()
+def test_deterministic_evaluation(env_name, env_creator, policy_config):
+    policy_config = policy_config(env_name)
+    env = env_creator(env_name, config=policy_config["env_config"])
+    ob_space, ac_space = env.observation_space, env.action_space
+    policy = TD3TFPolicy(ob_space, ac_space, policy_config)
+
+    obs = ob_space.sample()
     policy.evaluate(True)
-
-    for _ in range(3):
-        policy.learn_on_batch(worker.sample())
-
-    obs = policy.observation_space.sample()
     action1, _, _ = policy.compute_single_action(obs, [])
     action2, _, _ = policy.compute_single_action(obs, [])
     assert np.allclose(action1, action2)
@@ -33,12 +31,13 @@ def test_deterministic_evaluation(env_creator, policy_config):
 
 @pytest.mark.skip
 @pytest.mark.slow
-def test_pure_exploration(env_creator, policy_config):
-    env = env_creator(policy_config["env_config"])
+def test_pure_exploration(env_name, env_creator, policy_config):
+    policy_config = policy_config(env_name)
+    env = env_creator(env_name, config=policy_config["env_config"])
     ob_space, ac_space = env.observation_space, env.action_space
     policy = TD3TFPolicy(ob_space, ac_space, policy_config)
-    policy.set_pure_exploration_phase(True)
 
+    policy.set_pure_exploration_phase(True)
     obs = ob_space.sample()[None]
 
     def cdf(var):
@@ -55,8 +54,9 @@ def test_pure_exploration(env_creator, policy_config):
 
 @pytest.mark.skip
 @pytest.mark.slow
-def test_iid_gaussian_exploration(env_creator, policy_config):
-    env = env_creator(policy_config["env_config"])
+def test_iid_gaussian_exploration(env_name, env_creator, policy_config):
+    policy_config = policy_config(env_name)
+    env = env_creator(env_name, config=policy_config["env_config"])
     policy_config["exploration_noise_type"] = "gaussian"
     policy_config["exploration_gaussian_sigma"] = 0.5
     policy = TD3TFPolicy(env.observation_space, env.action_space, policy_config)

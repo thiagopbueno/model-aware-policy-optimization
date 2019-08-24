@@ -27,9 +27,11 @@ def input_layer_norm(request):
 
 
 @pytest.fixture
-def layer(space, input_layer_norm):
-    return TimeAwareObservationLayer(
-        observation_space=space, obs_embedding_dim=32, input_layer_norm=input_layer_norm
+def layer_fn(input_layer_norm):
+    return lambda space, units=32: TimeAwareObservationLayer(
+        observation_space=space,
+        obs_embedding_dim=units,
+        input_layer_norm=input_layer_norm,
     )
 
 
@@ -37,28 +39,24 @@ def obs_tensor(space):
     return obs_input(space)
 
 
-def test_initialization(space, input_layer_norm):
+def test_initialization(space, layer_fn):
     units = 10
-    layer = TimeAwareObservationLayer(
-        observation_space=space,
-        obs_embedding_dim=units,
-        input_layer_norm=input_layer_norm,
-    )
+    layer = layer_fn(space, units=units)
     layer(obs_tensor(space))
 
     assert layer.observation_space == space
     assert layer.obs_embedding_dim == units
-    assert layer.input_layer_norm == input_layer_norm
     n_layers = 1
-    if input_layer_norm:
+    if layer.input_layer_norm:
         n_layers += 1
     if isinstance(space, spaces.Dict):
         n_layers += 1
     assert len(layer.variables) == n_layers * 2
 
 
-def test_call(layer):
-    output = layer(obs_tensor(layer.observation_space))
+def test_call(space, layer_fn):
+    layer = layer_fn(space)
+    output = layer(obs_tensor(space))
 
     assert output.shape[-1] == layer.obs_embedding_dim
     assert len(output.shape) == 2

@@ -25,10 +25,10 @@ def model_config():
 
 
 @pytest.fixture
-def worker(env_creator, policy_cls_and_config, model_config):
+def worker(env_name, env_creator, policy_cls_and_config, model_config):
     policy_cls, policy_config = policy_cls_and_config
     return RolloutWorker(
-        env_creator=env_creator,
+        env_creator=lambda: env_creator(env_name),
         policy=policy_cls,
         policy_config=merge_dicts(policy_config, model_config),
     )
