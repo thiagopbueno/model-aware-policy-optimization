@@ -3,7 +3,6 @@ import pytest
 import numpy as np
 from gym.spaces import Box
 
-from mapo.tests.conftest import env_name, env_creator  # pylint: disable=unused-import
 from mapo.agents.mapo.mapo import MAPOTrainer
 from mapo.agents.mapo.off_mapo import OffMAPOTrainer
 
