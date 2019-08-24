@@ -39,7 +39,7 @@ class GaussianDynamicsModel(keras.Model):
             self.obs_space,
             obs_embedding_dim=self.config.get("obs_embedding_dim", 32),
             input_layer_norm=self.config.get("input_layer_norm", False),
-            ignore_time=False,
+            ignore_time=True,
         )
 
         self.hidden_layers = []

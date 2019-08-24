@@ -18,7 +18,7 @@ def main():
             get_default_config(),
             {
                 "env": "Navigation-v0",
-                "model": {"custom_options": {"actor": {"input_layer_norm": True}}},
+                "model": {"custom_options": {"actor": {"input_layer_norm": False}}},
             },
         ),
     )
