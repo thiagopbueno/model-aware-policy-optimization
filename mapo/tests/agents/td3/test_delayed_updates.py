@@ -9,7 +9,11 @@ from mapo.agents.td3.td3_policy import TD3TFPolicy
 
 @pytest.fixture
 def policy_config():
-    return lambda env_name: {"policy_delay": 3, "env": env_name}
+    return lambda env_name: {
+        "policy_delay": 3,
+        "env": env_name,
+        "apply_gradients": "delayed",
+    }
 
 
 @pytest.fixture

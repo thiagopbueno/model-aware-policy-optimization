@@ -158,7 +158,7 @@ def _apply_gradient_n_times(sgd_iter, apply_gradient_op):
     return tf.while_loop(cond, body, [i0])
 
 
-def apply_gradients_fn(policy, optimizer, grads_and_vars):
+def apply_gradients_n_times(policy, optimizer, grads_and_vars):
     """Update critic, dynamics, and actor for a number of iterations."""
     # pylint: disable=unused-argument
     config = policy.config
@@ -225,6 +225,18 @@ def apply_gradients_with_delays(policy, optimizer, grads_and_vars):
         return tf.group(dynamics_op, critic_op, actor_op)
 
 
+def apply_gradients_fn(policy, optimizer, grads_and_vars):
+    """Choose between 'sgd_iter' and 'delayed' strategies for applying gradients."""
+    if policy.config["apply_gradients"] == "sgd_iter":
+        return apply_gradients_n_times(policy, optimizer, grads_and_vars)
+    if policy.config["apply_gradients"] == "delayed":
+        return apply_gradients_with_delays(policy, optimizer, grads_and_vars)
+    raise ValueError(
+        "Invalid apply gradients strategy '{}'. "
+        "Try one of [sgd_iter, delayed]".format(policy.config["apply_gradients"])
+    )
+
+
 def build_mapo_network(policy, obs_space, action_space, config):
     """Construct MAPOModelV2 networks."""
     # pylint: disable=unused-argument
@@ -268,7 +280,6 @@ MAPOTFPolicy = build_tf_policy(
     stats_fn=extra_loss_fetches,
     optimizer_fn=create_separate_optimizers,
     gradients_fn=compute_separate_gradients,
-    # apply_gradients_fn=apply_gradients_with_delays,
     apply_gradients_fn=apply_gradients_fn,
     make_model=build_mapo_network,
     action_sampler_fn=main_actor_output,
