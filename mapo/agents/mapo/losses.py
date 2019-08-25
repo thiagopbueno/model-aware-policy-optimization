@@ -3,6 +3,7 @@ import tensorflow as tf
 from tensorflow import keras
 from ray.rllib.policy.sample_batch import SampleBatch
 from ray.rllib.evaluation.postprocessing import Postprocessing
+from ray.rllib.utils.explained_variance import explained_variance
 
 from mapo.kernels import KERNELS
 
@@ -92,6 +93,9 @@ def critic_return_loss(batch_tensors, model):
     q_loss_criterion = keras.losses.MeanSquaredError()
     q_pred = tf.squeeze(model.compute_q_values(obs, actions))
     fetches = {
+        "explained_variance": explained_variance(
+            batch_tensors[Postprocessing.ADVANTAGES], q_pred
+        ),
         "q_mean": tf.reduce_mean(q_pred),
         "q_max": tf.reduce_max(q_pred),
         "q_min": tf.reduce_min(q_pred),
