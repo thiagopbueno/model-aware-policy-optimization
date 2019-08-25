@@ -170,7 +170,7 @@ def test_compute_q_values(model, obs_ph, action_ph):
 
 def test_rsample_next_states(model, obs_ph, action_ph):
     states = model.rsample_next_states(obs_ph, action_ph)
-    assert states.shape[1:] == obs_ph.shape[1:]
+    assert states.shape[2:] == obs_ph.shape[1:]
 
     all_grads = tf.gradients(tf.reduce_sum(states), model.variables())
     filtered_all_vars = [
