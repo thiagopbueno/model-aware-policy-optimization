@@ -49,7 +49,7 @@ DEFAULT_CONFIG = with_common_config(
         "dynamics_optimizer": "Adam",
         # Whether to update components using separate "sgd_iter"s for each or
         # apply "delayed" updates to each.
-        "apply_gradients": "sgd_iter",
+        "apply_gradients": "delayed",
         # Number of updates for critic and dynamics for each actor update.
         "critic_sgd_iter": 80,
         "dynamics_sgd_iter": 80,
