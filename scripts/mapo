@@ -20,6 +20,7 @@ def read_config_json(filepath):
 
 def parse_args():
     """Parse command-line arguments."""
+    # pylint: disable=too-many-statements
     description = "Model-Aware Policy Optimization ({})".format(__version__)
     usage = "%(prog)s --run {MAPO,OffMAPO} --env ENV [ENV ...] [CONFIG-OPTIONS]"
 
@@ -80,6 +81,14 @@ def parse_args():
         "(default=%(default)s)",
     )
     mapo_args_group.add_argument(
+        "--madpg-estimator",
+        type=str,
+        nargs="+",
+        choices=["sf", "pd"],
+        default="[sf]",
+        help="The model-aware policy gradient estimator (default=%(default)s)",
+    )
+    mapo_args_group.add_argument(
         "--model-loss",
         type=str,
         choices=["mle", "pga"],
@@ -106,6 +115,14 @@ def parse_args():
     )
 
     optimizers_args_group = parser.add_argument_group(">> Optimization")
+    optimizers_args_group.add_argument(
+        "--apply-gradients",
+        type=str,
+        choices=["delayed", "sgd_iter"],
+        default="sgd_iter",
+        help="Strategy for applying gradients during optimization "
+        "(default=%(default)s).",
+    )
     optimizers_args_group.add_argument(
         "--num-sgd-iter",
         type=int,
@@ -352,6 +369,7 @@ def make_config(args):
             "branching_factor": tune.grid_search(args.branching_factor),
             "use_true_dynamics": args.use_true_dynamics,
             "model_loss": args.model_loss,
+            "madpg_estimator": tune.grid_search(args.madpg_estimator),
         }
 
     # === Models ===
@@ -380,6 +398,7 @@ def make_config(args):
 
     # === Optimization ===
     optimization_config = {
+        "apply_gradients": args.apply_gradients,
         "actor_optimizer": tune.grid_search(args.actor_optimizer),
         "critic_optimizer": tune.grid_search(args.critic_optimizer),
         "actor_lr": tune.grid_search(args.actor_lr),

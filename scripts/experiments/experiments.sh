@@ -3,9 +3,12 @@ ENV=Navigation-v0
 TIMESTEPS_TOTAL=100000
 NUM_CPUS_FOR_DRIVER=1
 NUM_GPUS=0.0
-TRAIN_BATCH_SIZE="128 4096"
-NUM_SAMPLES=3
-BRANCHING_FACTOR="4 32"
+TRAIN_BATCH_SIZE="128"
+NUM_SAMPLES=1
+BRANCHING_FACTOR="4"
+MADPG_ESTIMATOR="sf pd"
+APPLY_GRADIENTS="sgd_iter"
+KERNEL="l2 dot-product cos-similarity"
 ACTOR_OPTIMIZER="Adam"
 CRITIC_OPTIMIZER="RMSprop"
 DYNAMICS_OPTIMIZER="RMSprop"
@@ -32,6 +35,9 @@ NUM_GPUS = $NUM_GPUS
 TRAIN_BATCH_SIZE = $TRAIN_BATCH_SIZE
 NUM_SAMPLES = $NUM_SAMPLES
 BRANCHING_FACTOR = $BRANCHING_FACTOR
+MADPG_ESTIMATOR = $MADPG_ESTIMATOR
+APPLY_GRADIENTS = $APPLY_GRADIENTS
+KERNEL = $KERNEL
 ACTOR_OPTIMIZER = $ACTOR_OPTIMIZER
 CRITIC_OPTIMIZER = $CRITIC_OPTIMIZER
 DYNAMICS_OPTIMIZER = $DYNAMICS_OPTIMIZER
@@ -61,7 +67,7 @@ if [ "$test_td3" = true ] ; then
     mapo --run OurTD3 --env $ENV                    \
         --config-actor-net $CONFIG_ACTOR_NET        \
         --config-critic-net $CONFIG_CRITIC_NET      \
-        --branching-factor $BRANCHING_FACTOR        \
+        --apply-gradients $APPLY_GRADIENTS          \
         --actor-optimizer $ACTOR_OPTIMIZER          \
         --critic-optimizer $CRITIC_OPTIMIZER        \
         --actor-lr $ACTOR_LR                        \
@@ -85,7 +91,9 @@ if [ "$test_mapo_true_dynamics" = true ] ; then
     mapo --run MAPO --env $ENV --use-true-dynamics  \
         --config-actor-net $CONFIG_ACTOR_NET        \
         --config-critic-net $CONFIG_CRITIC_NET      \
+        --madpg-estimator $MADPG_ESTIMATOR          \
         --branching-factor $BRANCHING_FACTOR        \
+        --apply-gradients $APPLY_GRADIENTS          \
         --actor-optimizer $ACTOR_OPTIMIZER          \
         --critic-optimizer $CRITIC_OPTIMIZER        \
         --actor-lr $ACTOR_LR                        \
@@ -107,7 +115,9 @@ if [ "$test_mapo_mle_linear_dynamics" = true ] ; then
         --config-actor-net $CONFIG_ACTOR_NET            \
         --config-critic-net $CONFIG_CRITIC_NET          \
         --config-dynamics-net dynamics-linear-relu.json \
+        --madpg-estimator $MADPG_ESTIMATOR              \
         --branching-factor $BRANCHING_FACTOR            \
+        --apply-gradients $APPLY_GRADIENTS              \
         --actor-optimizer $ACTOR_OPTIMIZER              \
         --critic-optimizer $CRITIC_OPTIMIZER            \
         --dynamics-optimizer $DYNAMICS_OPTIMIZER        \
@@ -123,16 +133,19 @@ if [ "$test_mapo_mle_linear_dynamics" = true ] ; then
         --num-cpus-for-driver $NUM_CPUS_FOR_DRIVER      \
         --num-gpus $NUM_GPUS                            \
         --name $TEST_RUN/$EXPERIMENT                    \
-        --debug
+        # --debug
 fi
 
 if [ "$test_mapo_pga_linear_dynamics" = true ] ; then
     EXPERIMENT=mapo-pga-$FCNET-linear-dynamics
-    mapo --run MAPO --env $ENV --model-loss pga \
+    mapo --run MAPO --env $ENV --model-loss pga         \
         --config-actor-net $CONFIG_ACTOR_NET            \
         --config-critic-net $CONFIG_CRITIC_NET          \
         --config-dynamics-net dynamics-linear-relu.json \
+        --madpg-estimator $MADPG_ESTIMATOR              \
         --branching-factor $BRANCHING_FACTOR            \
+        --kernel $KERNEL                                \
+        --apply-gradients $APPLY_GRADIENTS              \
         --actor-optimizer $ACTOR_OPTIMIZER              \
         --critic-optimizer $CRITIC_OPTIMIZER            \
         --dynamics-optimizer $DYNAMICS_OPTIMIZER        \
@@ -157,7 +170,9 @@ if [ "$test_mapo_mle" = true ] ; then
         --config-actor-net $CONFIG_ACTOR_NET            \
         --config-critic-net $CONFIG_CRITIC_NET          \
         --config-dynamics-net $CONFIG_DYNAMICS_NET      \
+        --madpg-estimator $MADPG_ESTIMATOR              \
         --branching-factor $BRANCHING_FACTOR            \
+        --apply-gradients $APPLY_GRADIENTS              \
         --actor-optimizer $ACTOR_OPTIMIZER              \
         --critic-optimizer $CRITIC_OPTIMIZER            \
         --dynamics-optimizer $DYNAMICS_OPTIMIZER        \
@@ -182,7 +197,10 @@ if [ "$test_mapo_pga" = true ] ; then
         --config-actor-net $CONFIG_ACTOR_NET            \
         --config-critic-net $CONFIG_CRITIC_NET          \
         --config-dynamics-net $CONFIG_DYNAMICS_NET      \
+        --madpg-estimator $MADPG_ESTIMATOR              \
         --branching-factor $BRANCHING_FACTOR            \
+        --kernel $KERNEL                                \
+        --apply-gradients $APPLY_GRADIENTS              \
         --actor-optimizer $ACTOR_OPTIMIZER              \
         --critic-optimizer $CRITIC_OPTIMIZER            \
         --dynamics-optimizer $DYNAMICS_OPTIMIZER        \
