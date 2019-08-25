@@ -6,7 +6,12 @@ from ray.rllib.evaluation import RolloutWorker
 
 @pytest.fixture
 def policy_config():
-    return lambda env_name: {"actor_delay": 3, "critic_delay": 2, "env": env_name}
+    return lambda env_name: {
+        "actor_delay": 3,
+        "critic_delay": 2,
+        "env": env_name,
+        "apply_gradients": "delayed",
+    }
 
 
 @pytest.fixture
