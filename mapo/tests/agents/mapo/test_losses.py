@@ -66,13 +66,8 @@ def twin_q(request):
     return request.param
 
 
-@pytest.fixture(params=[False, True])
-def use_true_dynamics(request):
-    return request.param
-
-
 @pytest.fixture
-def config(model_config, twin_q, smooth_target_policy):
+def config(model_config, smooth_target_policy, twin_q):
     return {
         "gamma": 0.99,
         "kernel": "l2",
@@ -84,6 +79,16 @@ def config(model_config, twin_q, smooth_target_policy):
         "target_noise": 0.2,
         "target_noise_clip": 0.5,
     }
+
+
+@pytest.fixture(params=[False, True])
+def use_true_dynamics(request):
+    return request.param
+
+
+@pytest.fixture(params=[0, 4])
+def branching_factor(request):
+    return request.param
 
 
 @pytest.fixture(params=[True, False])
@@ -210,10 +215,12 @@ def test_actor_dpg_loss(env, config, model_fn, batch_tensors_fn):
 
 
 def test_actor_model_aware_loss(
-    use_true_dynamics, env, config, model_fn, batch_tensors_fn
+    use_true_dynamics, branching_factor, env, config, model_fn, batch_tensors_fn
 ):
+    # pylint: disable=too-many-arguments
     model = model_fn(env, config)
     batch_tensors = batch_tensors_fn(env)
+    config["branching_factor"] = branching_factor
     config["use_true_dynamics"] = use_true_dynamics
     loss = losses.actor_model_aware_loss(batch_tensors, model, env, config)
     variables = model.actor_variables
