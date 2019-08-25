@@ -83,7 +83,7 @@ if [ "$test_td3" = true ] ; then
         --batch-mode truncate_episodes              \
         # --actor-delay 2                            \
         --name $TEST_RUN/$EXPERIMENT                \
-        --debug
+        # --debug
 fi
 
 if [ "$test_mapo_true_dynamics" = true ] ; then
@@ -106,7 +106,7 @@ if [ "$test_mapo_true_dynamics" = true ] ; then
         --num-cpus-for-driver $NUM_CPUS_FOR_DRIVER  \
         --num-gpus $NUM_GPUS                        \
         --name $TEST_RUN/$EXPERIMENT                \
-        --debug
+        # --debug
 fi
 
 if [ "$test_mapo_mle_linear_dynamics" = true ] ; then
@@ -161,7 +161,7 @@ if [ "$test_mapo_pga_linear_dynamics" = true ] ; then
         --num-cpus-for-driver $NUM_CPUS_FOR_DRIVER      \
         --num-gpus $NUM_GPUS                            \
         --name $TEST_RUN/$EXPERIMENT                    \
-        --debug
+        # --debug
 fi
 
 if [ "$test_mapo_mle" = true ] ; then
@@ -188,7 +188,7 @@ if [ "$test_mapo_mle" = true ] ; then
         --num-cpus-for-driver $NUM_CPUS_FOR_DRIVER      \
         --num-gpus $NUM_GPUS                            \
         --name $TEST_RUN/$EXPERIMENT                    \
-        --debug
+        # --debug
 fi
 
 if [ "$test_mapo_pga" = true ] ; then
@@ -216,7 +216,7 @@ if [ "$test_mapo_pga" = true ] ; then
         --num-cpus-for-driver $NUM_CPUS_FOR_DRIVER      \
         --num-gpus $NUM_GPUS                            \
         --name $TEST_RUN/$EXPERIMENT                    \
-        --debug
+        # --debug
 fi
 
 if [ "$tensorboard" = true ] ; then

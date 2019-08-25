@@ -446,7 +446,7 @@ def make_config(args):
         eval_config["evaluation_num_episodes"] = args.evaluation_num_episodes
 
     # === Debugging ===
-    debugging_config = {"output": "logdir" if args.debug else None}
+    debugging_config = {"debug": args.debug, "output": "logdir" if args.debug else None}
 
     # === TF Session ===
     tf_session_config = {"tf_session_args": {"log_device_placement": False}}

@@ -69,6 +69,7 @@ DEFAULT_CONFIG = with_common_config(
         # Number of actors used for parallelism
         "num_workers": 0,
         # === Debugging ===
+        "debug": False,
         # Specify where experiences should be saved:
         #  - None: don't save any experiences
         #  - "logdir" to save to the agent log dir

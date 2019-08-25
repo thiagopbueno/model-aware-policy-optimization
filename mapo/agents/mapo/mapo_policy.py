@@ -150,9 +150,10 @@ def compute_separate_gradients(policy, optimizer, loss):
     )
 
     policy.grad_stats = {}
-    _add_grad_stats(policy.grad_stats, "actor", actor_grads_and_vars)
-    _add_grad_stats(policy.grad_stats, "critic", critic_grads_and_vars)
-    _add_grad_stats(policy.grad_stats, "dynamics", dynamics_grads_and_vars)
+    if config["debug"]:
+        _add_grad_stats(policy.grad_stats, "actor", actor_grads_and_vars)
+        _add_grad_stats(policy.grad_stats, "critic", critic_grads_and_vars)
+        _add_grad_stats(policy.grad_stats, "dynamics", dynamics_grads_and_vars)
 
     return dynamics_grads_and_vars + critic_grads_and_vars + actor_grads_and_vars
 
