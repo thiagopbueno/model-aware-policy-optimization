@@ -1,10 +1,10 @@
-TEST_RUN=nav0/2019-08-24/run4
+TEST_RUN=nav0/2019-08-24/run5
 ENV=Navigation-v0
 TIMESTEPS_TOTAL=100000
 NUM_CPUS_FOR_DRIVER=1
 NUM_GPUS=0.0
-TRAIN_BATCH_SIZE="128 1024 4096"
-NUM_SAMPLES=6
+TRAIN_BATCH_SIZE="128 4096"
+NUM_SAMPLES=3
 BRANCHING_FACTOR="4 32"
 ACTOR_OPTIMIZER="Adam"
 CRITIC_OPTIMIZER="RMSprop"
@@ -13,9 +13,9 @@ ACTOR_LR="1e-2"
 CRITIC_LR="1e-3"
 DYNAMICS_LR=1e-3
 CRITIC_SGD_ITER="10"
-DYNAMICS_SGD_ITER="10 20"
+DYNAMICS_SGD_ITER="10"
 NUM_SGD_ITER=1
-FCNET=fcnet-64-elu
+FCNET=fcnet-64-elu-layernorm
 CONFIG_ACTOR_NET=$FCNET.json
 CONFIG_CRITIC_NET=$FCNET.json
 
@@ -47,17 +47,17 @@ CONFIG_CRITIC_NET = $CONFIG_CRITIC_NET
 END
 
 
-test_td3=true
-test_mapo_true_dynamics=true
+test_td3=false
+test_mapo_false_dynamics=false
 test_mapo_mle_linear_dynamics=true
-test_mapo_pga_linear_dynamics=true
-test_mapo_mle=true
-test_mapo_pga=true
+test_mapo_pga_linear_dynamics=false
+test_mapo_mle=false
+test_mapo_pga=false
 
-tensorboard=true
+tensorboard=false
 
 if [ "$test_td3" = true ] ; then
-    EXPERIMENT=nav0-td3-baseline-$FCNET
+    EXPERIMENT=td3-baseline-$FCNET
     mapo --run OurTD3 --env $ENV                    \
         --config-actor-net $CONFIG_ACTOR_NET        \
         --config-critic-net $CONFIG_CRITIC_NET      \
@@ -81,7 +81,7 @@ if [ "$test_td3" = true ] ; then
 fi
 
 if [ "$test_mapo_true_dynamics" = true ] ; then
-    EXPERIMENT=nav0-mapo-true-dynamics-$FCNET
+    EXPERIMENT=mapo-true-dynamics-$FCNET
     mapo --run MAPO --env $ENV --use-true-dynamics  \
         --config-actor-net $CONFIG_ACTOR_NET        \
         --config-critic-net $CONFIG_CRITIC_NET      \
@@ -102,7 +102,7 @@ if [ "$test_mapo_true_dynamics" = true ] ; then
 fi
 
 if [ "$test_mapo_mle_linear_dynamics" = true ] ; then
-    EXPERIMENT=nav0-mapo-mle-$FCNET-linear-dynamics
+    EXPERIMENT=mapo-mle-$FCNET-linear-dynamics
     mapo --run MAPO --env $ENV --model-loss mle         \
         --config-actor-net $CONFIG_ACTOR_NET            \
         --config-critic-net $CONFIG_CRITIC_NET          \
@@ -127,7 +127,7 @@ if [ "$test_mapo_mle_linear_dynamics" = true ] ; then
 fi
 
 if [ "$test_mapo_pga_linear_dynamics" = true ] ; then
-    EXPERIMENT=nav0-mapo-pga-$FCNET-linear-dynamics
+    EXPERIMENT=mapo-pga-$FCNET-linear-dynamics
     mapo --run MAPO --env $ENV --model-loss pga \
         --config-actor-net $CONFIG_ACTOR_NET            \
         --config-critic-net $CONFIG_CRITIC_NET          \
@@ -152,7 +152,7 @@ if [ "$test_mapo_pga_linear_dynamics" = true ] ; then
 fi
 
 if [ "$test_mapo_mle" = true ] ; then
-    EXPERIMENT=nav0-mapo-mle-$FCNET
+    EXPERIMENT=mapo-mle-$FCNET
     mapo --run MAPO --env $ENV --model-loss mle         \
         --config-actor-net $CONFIG_ACTOR_NET            \
         --config-critic-net $CONFIG_CRITIC_NET          \
@@ -177,7 +177,7 @@ if [ "$test_mapo_mle" = true ] ; then
 fi
 
 if [ "$test_mapo_pga" = true ] ; then
-    EXPERIMENT=nav0-mapo-pga-$FCNET
+    EXPERIMENT=mapo-pga-$FCNET
     mapo --run MAPO --env $ENV --model-loss pga         \
         --config-actor-net $CONFIG_ACTOR_NET            \
         --config-critic-net $CONFIG_CRITIC_NET          \
