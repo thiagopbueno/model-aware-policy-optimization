@@ -446,10 +446,61 @@ def make_config(args):
     }
 
 
+def get_trial_str_creator(config):
+    """Returns the trial string creator function."""
+
+    grid_search_config = {}
+    for key, value in config.items():
+        if isinstance(value, dict) and "grid_search" in value:
+            grid_search_config[key] = value["grid_search"]
+
+    def _trial_str_creator(trial):
+        """Returns the trial name."""
+
+        short_name = {
+            "branching_factor": "bfac",
+            "actor_optimizer": "aopt",
+            "critic_optimizer": "copt",
+            "dynamics_optimizer": "dopt",
+            "actor_lr": "alr",
+            "critic_lr": "clr",
+            "dynamics_lr": "dlr",
+            "critic_sgd_iter": "csgd",
+            "dynamics_sgd_iter": "dsgd",
+            "train_batch_size": "batch",
+        }
+
+        sample_id = trial.experiment_tag[: trial.experiment_tag.find("_")]
+        tags = trial.experiment_tag[trial.experiment_tag.find("_") + 1 :]
+
+        params = {}
+        for param in tags.split(","):
+            key_value = param.split("=")
+            key, value = key_value[0], key_value[1]
+            params[key] = value
+
+        trial_params_list = []
+        for key in sorted(params):
+            if len(grid_search_config[key]) > 1:
+                value = params[key]
+                key = short_name.get(key, key)
+                trial_params_list.append("{}={}".format(key, value))
+        trial_params = ",".join(trial_params_list)
+
+        trainable = trial.trainable_name
+        trial_id = trial.trial_id
+        trial_str = "{}_{}_{}_{}".format(trial_id, trainable, sample_id, trial_params)
+        return trial_str
+
+    return _trial_str_creator
+
+
 def run(args):
     """Run experiments with configuration given by command-line arguments."""
     trainer = args.run
     experiment = args.name
+    config = make_config(args)
+    trial_name_creator = get_trial_str_creator(config)
 
     analysis = tune.run(
         trainer,
@@ -457,7 +508,8 @@ def run(args):
         verbose=args.verbose,
         stop={"timesteps_total": args.timesteps_total},
         num_samples=args.num_samples,
-        config=make_config(args),
+        config=config,
+        trial_name_creator=tune.function(trial_name_creator),
         checkpoint_freq=10,
         checkpoint_at_end=True,
     )
