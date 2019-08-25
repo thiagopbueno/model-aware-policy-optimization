@@ -119,7 +119,11 @@ def actor_model_aware_loss(batch_tensors, model, env, config):
     n_samples = config["branching_factor"]
     actions = model.compute_actions(obs)
     if n_samples == 0:
-        sampled_next_state = tf.expand_dims(batch_tensors[SampleBatch.NEXT_OBS], 0)
+        sampled_next_state = batch_tensors[SampleBatch.NEXT_OBS]
+        if isinstance(sampled_next_state, (tuple, list)):
+            sampled_next_state = tuple(tf.expand_dims(x, 0) for x in sampled_next_state)
+        else:
+            sampled_next_state = tf.expand_dims(sampled_next_state, 0)
         if config["use_true_dynamics"]:
             next_state_log_prob = env._transition_log_prob_fn(
                 obs, actions, sampled_next_state
