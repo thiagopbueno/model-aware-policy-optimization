@@ -111,41 +111,73 @@ def actor_dpg_loss(batch_tensors, model):
     return -tf.reduce_mean(policy_action_value)
 
 
-def actor_model_aware_loss(batch_tensors, model, env, config):
-    """Compute model-aware deterministic policy gradient loss."""
+def pd_madpg_estimator(batch_tensors, model, env, config):
+    """
+    Compute model-aware dpg using the next state value pathwise derivative estimator.
+    """
     # pylint: disable=protected-access
-    obs = batch_tensors[SampleBatch.CUR_OBS]
-    gamma = config["gamma"]
+    state = batch_tensors[SampleBatch.CUR_OBS]
+    action = model.compute_actions(state)
     n_samples = config["branching_factor"]
-    actions = model.compute_actions(obs)
+    gamma = config["gamma"]
+
     if n_samples == 0:
-        sampled_next_state = batch_tensors[SampleBatch.NEXT_OBS]
-        if isinstance(sampled_next_state, (tuple, list)):
-            sampled_next_state = tuple(tf.expand_dims(x, 0) for x in sampled_next_state)
+        raise ValueError(
+            "Using true environment samples with the pathwise derivative"
+            "estimator is currently not supported."
+        )
+    if config["use_true_dynamics"]:
+        raise ValueError(
+            "Cannot calculate pathwise derivative estimator using real dynamics."
+        )
+    next_state = model.rsample_next_states(state, action, n_samples)
+    next_state_value = tf.squeeze(model.compute_state_values(next_state), axis=-1)
+    reward = tf.reduce_mean(env._reward_fn(state, action, next_state), axis=0)
+    return tf.reduce_mean(reward + gamma * tf.reduce_mean(next_state_value, axis=0))
+
+
+def sf_madpg_estimator(batch_tensors, model, env, config):
+    """Compute model-aware dpg using the next state value score function estimator."""
+    # pylint: disable=protected-access
+    state = batch_tensors[SampleBatch.CUR_OBS]
+    action = model.compute_actions(state)
+    n_samples = config["branching_factor"]
+    gamma = config["gamma"]
+
+    if n_samples == 0:
+        next_state = batch_tensors[SampleBatch.NEXT_OBS]
+        if isinstance(next_state, (tuple, list)):
+            next_state = tuple(tf.expand_dims(x, 0) for x in next_state)
         else:
-            sampled_next_state = tf.expand_dims(sampled_next_state, 0)
+            next_state = tf.expand_dims(next_state, 0)
         if config["use_true_dynamics"]:
-            next_state_log_prob = env._transition_log_prob_fn(
-                obs, actions, sampled_next_state
-            )
+            log_prob = env._transition_log_prob_fn(state, action, next_state)
         else:
-            next_state_log_prob = model.compute_states_log_prob(
-                obs, actions, sampled_next_state
-            )
+            log_prob = model.compute_states_log_prob(state, action, next_state)
     else:
         if config["use_true_dynamics"]:
-            sampled_next_state, next_state_log_prob = env._transition_fn(
-                obs, actions, n_samples
-            )
+            next_state, log_prob = env._transition_fn(state, action, n_samples)
         else:
-            sampled_next_state, next_state_log_prob = model.compute_log_prob_sampled(
-                obs, actions, (n_samples,)
+            next_state, log_prob = model.compute_log_prob_sampled(
+                state, action, n_samples
             )
-    next_state_value = tf.stop_gradient(
-        tf.squeeze(model.compute_state_values(sampled_next_state), axis=-1)
-    )
-    reward = tf.reduce_mean(env._reward_fn(obs, actions, sampled_next_state), axis=0)
-    model_aware_policy_objective = tf.reduce_mean(
-        reward + gamma * tf.reduce_mean(next_state_log_prob * next_state_value, axis=0)
-    )
-    return -model_aware_policy_objective
+
+    next_state_value = tf.squeeze(model.compute_state_values(next_state), axis=-1)
+    next_state_value_sf = log_prob * tf.stop_gradient(next_state_value)
+    reward = tf.reduce_mean(env._reward_fn(state, action, next_state), axis=0)
+    return tf.reduce_mean(reward + gamma * tf.reduce_mean(next_state_value_sf, axis=0))
+
+
+def actor_model_aware_loss(batch_tensors, model, env, config):
+    """Compute model-aware deterministic policy gradient loss."""
+    if config["madpg_estimator"] == "sf":
+        madpg_grad_estimator = sf_madpg_estimator(batch_tensors, model, env, config)
+    elif config["madpg_estimator"] == "pd":
+        madpg_grad_estimator = pd_madpg_estimator(batch_tensors, model, env, config)
+    else:
+        raise ValueError(
+            "Invalid gradient estimator option '{}'. Try one of "
+            "[sf, pd]".format(config["madpg_estimator"])
+        )
+
+    return -madpg_grad_estimator

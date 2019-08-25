@@ -75,6 +75,7 @@ def config(model_config, smooth_target_policy, twin_q):
         "twin_q": twin_q,
         "branching_factor": 4,
         "use_true_dynamics": False,
+        "madpg_estimator": "sf",
         "smooth_target_policy": smooth_target_policy,
         "target_noise": 0.2,
         "target_noise_clip": 0.5,
@@ -89,6 +90,20 @@ def use_true_dynamics(request):
 @pytest.fixture(params=[0, 4])
 def branching_factor(request):
     return request.param
+
+
+@pytest.fixture(params=["sf", "pd"])
+def madpg_estimator(request):
+    return request.param
+
+
+@pytest.fixture
+def madpg_options(use_true_dynamics, branching_factor, madpg_estimator):
+    return {
+        "use_true_dynamics": use_true_dynamics,
+        "branching_factor": branching_factor,
+        "madpg_estimator": madpg_estimator,
+    }
 
 
 @pytest.fixture(params=[True, False])
@@ -214,16 +229,22 @@ def test_actor_dpg_loss(env, config, model_fn, batch_tensors_fn):
     assert SampleBatch.CUR_OBS in batch_tensors.accessed_keys
 
 
-def test_actor_model_aware_loss(
-    use_true_dynamics, branching_factor, env, config, model_fn, batch_tensors_fn
-):
+def test_actor_model_aware_loss(env, config, model_fn, batch_tensors_fn, madpg_options):
     # pylint: disable=too-many-arguments
     model = model_fn(env, config)
     batch_tensors = batch_tensors_fn(env)
-    config["branching_factor"] = branching_factor
-    config["use_true_dynamics"] = use_true_dynamics
-    loss = losses.actor_model_aware_loss(batch_tensors, model, env, config)
-    variables = model.actor_variables
+    config.update(madpg_options)
 
-    assert_consistent_shapes_and_grads(loss, variables)
-    assert SampleBatch.CUR_OBS in batch_tensors.accessed_keys
+    if config["madpg_estimator"] == "pd" and (
+        config["branching_factor"] == 0 or config["use_true_dynamics"]
+    ):
+        with pytest.raises(ValueError):
+            loss = losses.actor_model_aware_loss(batch_tensors, model, env, config)
+    else:
+        loss = losses.actor_model_aware_loss(batch_tensors, model, env, config)
+        variables = model.actor_variables
+
+        assert_consistent_shapes_and_grads(loss, variables)
+        assert SampleBatch.CUR_OBS in batch_tensors.accessed_keys
+        if config["branching_factor"] == 0:
+            assert SampleBatch.NEXT_OBS in batch_tensors.accessed_keys

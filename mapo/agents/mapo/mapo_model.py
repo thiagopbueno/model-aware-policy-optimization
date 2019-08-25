@@ -146,22 +146,17 @@ class MAPOModel(TFModelV2):  # pylint: disable=abstract-method
         """Compute state values by composing policy and Q networks."""
         return self.compute_q_values(obs, self.compute_actions(obs))
 
-    def compute_state_dist(self, obs, action):
-        """Compute the the dynamics model's conditional distribution of
-        the next state."""
-        return self.models["dynamics"].dist(obs, action)
-
-    def sample_next_states(self, obs, action, shape=()):
-        """Sample the next state from the dynamics model."""
-        return self.models["dynamics"].sample(obs, action, shape=shape)
+    def rsample_next_states(self, obs, action, n_samples=1):
+        """Compute reparameterized next state samples from the dynamics model."""
+        return self.models["dynamics"].sample(obs, action, shape=(n_samples,))
 
     def compute_states_log_prob(self, obs, action, next_obs):
         """Compute the log-likelihood of a transition using the dynamics model."""
         return self.models["dynamics"].log_prob(obs, action, next_obs)
 
-    def compute_log_prob_sampled(self, obs, action, shape=()):
+    def compute_log_prob_sampled(self, obs, action, n_samples=1):
         """Sample the next state and compute its log_prob using the dynamics model."""
-        return self.models["dynamics"].log_prob_sampled(obs, action, shape=shape)
+        return self.models["dynamics"].log_prob_sampled(obs, action, shape=(n_samples,))
 
     def _get_model(self, name, is_target):
         return self.target_models[name] if is_target else self.models[name]
