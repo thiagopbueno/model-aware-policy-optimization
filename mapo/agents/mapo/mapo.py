@@ -25,6 +25,10 @@ DEFAULT_CONFIG = with_common_config(
         "model_loss": "mle",
         # Which kernel metric to compare gradients in dynamics loss
         "kernel": "l2",
+        # Which gradient estimator to use in model-aware dpg
+        # Valid values: "sf" (score function), "pd" (pathwise derivative)
+        # Warning: "pd" is incompatible with a branching factor of 0, for now
+        "madpg_estimator": "sf",
         # === Model ===
         # actor and critic network configuration
         "model": merge_dicts(
