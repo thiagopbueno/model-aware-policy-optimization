@@ -53,7 +53,7 @@ def parse_args():
         "--debug",
         action="store_true",
         default=False,
-        help="Debugging flag (default=False).",
+        help="Debugging flag (default=%(default)s).",
     )
 
     mapo_args_group = parser.add_argument_group(">> MAPO")
@@ -62,27 +62,30 @@ def parse_args():
         type=str,
         choices=["l1", "l2", "linf", "dot-product", "cos-similarity"],
         default="l2",
-        help="Kernel metric to compare gradients in MAPO.",
+        help="Kernel metric to compare gradients in MAPO. (default=%(default)s)",
     )
     mapo_args_group.add_argument(
         "--use-true-dynamics",
         action="store_true",
         default=False,
         help="Flag to use the true dyamics log prob in the gradient estimator "
-        "(default=False)",
+        "(default=%(default)s)",
     )
     mapo_args_group.add_argument(
         "--branching-factor",
         type=int,
-        default=32,
-        help="The number of virtual samples used in MAPO gradient " "(default=32)",
+        nargs="+",
+        default=[32],
+        help="The number of virtual samples used in MAPO gradient "
+        "(default=%(default)s)",
     )
     mapo_args_group.add_argument(
         "--model-loss",
         type=str,
         choices=["mle", "pga"],
         default="pga",
-        help="The loss function used for learning the dynamics model " "(default=pga)",
+        help="The loss function used for learning the dynamics model "
+        "(default=%(default)s)",
     )
 
     model_args_group = parser.add_argument_group(">> Models")
@@ -107,23 +110,28 @@ def parse_args():
         "--num-sgd-iter",
         type=int,
         default=80,
-        help="The number of SGD optimizer iterations (defaul=80).",
+        help="The number of SGD optimizer iterations (default=%(default)s).",
     )
     optimizers_args_group.add_argument(
         "--critic-sgd-iter",
         type=int,
-        default=80,
-        help="The number of SGD optimizer iterations for the critic (defaul=80).",
+        nargs="+",
+        default=[80],
+        help="The number of SGD optimizer iterations for the critic "
+        "(default=%(default)s).",
     )
     optimizers_args_group.add_argument(
         "--dynamics-sgd-iter",
         type=int,
-        default=80,
-        help="The number of SGD optimizer iterations for the dynamics (defaul=80).",
+        nargs="+",
+        default=[80],
+        help="The number of SGD optimizer iterations for the dynamics"
+        "(default=%(default)s).",
     )
     optimizers_args_group.add_argument(
         "--actor-optimizer",
         type=str,
+        nargs="+",
         choices=[
             "Adadelta",
             "Adagrad",
@@ -134,18 +142,21 @@ def parse_args():
             "RMSprop",
             "SGD",
         ],
-        default="Adam",
-        help="The optimizer for the actor network (default=Adam).",
+        default=["Adam"],
+        help="The optimizer for the actor network (default=%(default)s).",
     )
     optimizers_args_group.add_argument(
         "--actor-lr",
         type=float,
-        default=1e-3,
-        help="The learning rate for the actor (policy) optimizer " "(defaul=1e-3).",
+        nargs="+",
+        default=[1e-3],
+        help="The learning rate for the actor (policy) optimizer "
+        "(default=%(default)s).",
     )
     optimizers_args_group.add_argument(
         "--critic-optimizer",
         type=str,
+        nargs="+",
         choices=[
             "Adadelta",
             "Adagrad",
@@ -156,19 +167,22 @@ def parse_args():
             "RMSprop",
             "SGD",
         ],
-        default="Adam",
-        help="The optimizer for the critic network (default=Adam).",
+        default=["Adam"],
+        help="The optimizer for the critic (Q-function) network "
+        "(default=%(default)s).",
     )
     optimizers_args_group.add_argument(
         "--critic-lr",
         type=float,
-        default=1e-3,
+        nargs="+",
+        default=[1e-3],
         help="The learning rate for the critic (Q-function) optimizer "
-        "(defaul=1e-3).",
+        "(default=%(default)s).",
     )
     optimizers_args_group.add_argument(
         "--dynamics-optimizer",
         type=str,
+        nargs="+",
         choices=[
             "Adadelta",
             "Adagrad",
@@ -179,32 +193,36 @@ def parse_args():
             "RMSprop",
             "SGD",
         ],
-        default="Adam",
-        help="The optimizer for the dynamics model (default=Adam).",
+        default=["Adam"],
+        help="The optimizer for the dynamics model (default=%(default)s).",
     )
     optimizers_args_group.add_argument(
         "--dynamics-lr",
         type=float,
-        default=1e-3,
-        help="The learning rate for the dynamics optimizer (defaul=1e-3).",
+        nargs="+",
+        default=[1e-3],
+        help="The learning rate for the dynamics optimizer (default=%(default)s).",
     )
     optimizers_args_group.add_argument(
         "--actor-delay",
         type=int,
         default=80,
-        help="The number of traing steps before updating the policy " "(default=8).",
+        help="The number of traing steps before updating the policy "
+        "(default=%(default)s).",
     )
     optimizers_args_group.add_argument(
         "--critic-delay",
         type=int,
         default=1,
-        help="The number of traing steps before updating the critic " "(default=1).",
+        help="The number of traing steps before updating the critic "
+        "(default=%(default)s).",
     )
     optimizers_args_group.add_argument(
         "--dynamics-delay",
         type=int,
         default=20,
-        help="The number of traing steps before updating the dynamics" "(default=1).",
+        help="The number of traing steps before updating the dynamics"
+        "(default=%(default)s).",
     )
 
     exec_args_group = parser.add_argument_group(">> Execution")
@@ -218,26 +236,28 @@ def parse_args():
         "--timesteps-per-iteration",
         type=int,
         default=1024,
-        help="The number of timesteps before returning to the trainer (default=1024).",
+        help="The number of timesteps before returning to the trainer "
+        "(default=%(default)s).",
     )
     exec_args_group.add_argument(
         "--batch-mode",
         type=str,
         choices=["complete_episodes", "truncate_episodes"],
         default="complete_episodes",
-        help="The batch mode (default=complete_episodes).",
+        help="The batch mode (default=%(default)s).",
     )
     exec_args_group.add_argument(
         "--sample-batch-size",
         type=int,
         default=1,
-        help="The size of the batch collected by workers (default=1).",
+        help="The size of the batch collected by workers (default=%(default)s).",
     )
     exec_args_group.add_argument(
         "--train-batch-size",
         type=int,
-        default=128,
-        help="The size of the batch for training (default=128).",
+        nargs="+",
+        default=[2048],
+        help="The size of the batch for training (default=%(default)s).",
     )
 
     resources_args_group = parser.add_argument_group(">> Resources")
@@ -245,37 +265,38 @@ def parse_args():
         "--num-cpus-for-driver",
         type=int,
         default=1,
-        help="The number of CPUs to allocate to the driver (default=1).",
+        help="The number of CPUs to allocate to the driver (default=%(default)s).",
     )
     resources_args_group.add_argument(
         "--num-gpus",
         type=float,
         default=0.0,
-        help="The number of GPUs to allocate to the driver (default=0.0).",
+        help="The number of GPUs to allocate to the driver (default=%(default)s).",
     )
     resources_args_group.add_argument(
         "--num-workers",
         type=int,
         default=0,
-        help="The number of actors used for parallelism (default=0).",
+        help="The number of actors used for parallelism (default=%(default)s).",
     )
     resources_args_group.add_argument(
         "--num-cpus-per-worker",
         type=int,
         default=1,
-        help="The number of CPUs to allocate to each worker (default=1).",
+        help="The number of CPUs to allocate to each worker (default=%(default)s).",
     )
     resources_args_group.add_argument(
         "--num-gpus-per-worker",
         type=float,
         default=0.0,
-        help="The number of GPUs to allocate to each worker (default=0.0).",
+        help="The number of GPUs to allocate to each worker (default=%(default)s).",
     )
     resources_args_group.add_argument(
         "--num-envs-per-worker",
         type=int,
         default=8,
-        help="The number of envs per worker used for parallelism (default=8).",
+        help="The number of envs per worker used for parallelism "
+        "(default=%(default)s).",
     )
 
     eval_args_group = parser.add_argument_group(">> Evaluation")
@@ -283,13 +304,15 @@ def parse_args():
         "--evaluation-interval",
         type=int,
         default=10,
-        help="The interval between training steps for evaluation " "(default=10)",
+        help="The interval between training steps for evaluation "
+        "(default=%(default)s)",
     )
     eval_args_group.add_argument(
         "--evaluation-num-episodes",
         type=int,
         default=10,
-        help="The number of episodes to run per evaluation period " "(default=10)",
+        help="The number of episodes to run per evaluation period "
+        "(default=%(default)s)",
     )
 
     exp_args_group = parser.add_argument_group(">> Experiment")
@@ -298,7 +321,7 @@ def parse_args():
         type=int,
         default=1,
         help="The number of times to sample from the hyperparameter space "
-        "(default=1).",
+        "(default=%(default)s).",
     )
     exp_args_group.add_argument("--name", type=str, help="The name of the experiment.")
 
@@ -326,7 +349,7 @@ def make_config(args):
     mapo_config = {}
     if args.run in ["MAPO", "OffMAPO"]:
         mapo_config = {
-            "branching_factor": args.branching_factor,
+            "branching_factor": tune.grid_search(args.branching_factor),
             "use_true_dynamics": args.use_true_dynamics,
             "model_loss": args.model_loss,
         }
@@ -357,29 +380,33 @@ def make_config(args):
 
     # === Optimization ===
     optimization_config = {
-        "actor_optimizer": args.actor_optimizer,
-        "critic_optimizer": args.critic_optimizer,
-        "actor_lr": args.actor_lr,
-        "critic_lr": args.critic_lr,
+        "actor_optimizer": tune.grid_search(args.actor_optimizer),
+        "critic_optimizer": tune.grid_search(args.critic_optimizer),
+        "actor_lr": tune.grid_search(args.actor_lr),
+        "critic_lr": tune.grid_search(args.critic_lr),
         "actor_delay": args.actor_delay,
     }
     if args.run == "MAPO":
         optimization_config["optimizer"] = {"num_sgd_iter": args.num_sgd_iter}
 
     if args.run in ["MAPO", "OffMAPO"]:
-        optimization_config["critic_sgd_iter"] = args.critic_sgd_iter
+        optimization_config["critic_sgd_iter"] = tune.grid_search(args.critic_sgd_iter)
         optimization_config["critic_delay"] = args.critic_delay
 
         if not args.use_true_dynamics:
-            optimization_config["dynamics_optimizer"] = args.dynamics_optimizer
-            optimization_config["dynamics_sgd_iter"] = args.dynamics_sgd_iter
-            optimization_config["dynamics_lr"] = args.dynamics_lr
+            optimization_config["dynamics_optimizer"] = tune.grid_search(
+                args.dynamics_optimizer
+            )
+            optimization_config["dynamics_sgd_iter"] = tune.grid_search(
+                args.dynamics_sgd_iter
+            )
+            optimization_config["dynamics_lr"] = tune.grid_search(args.dynamics_lr)
 
     # === Execution ===
     execution_config = {
         "batch_mode": args.batch_mode,
         "sample_batch_size": args.sample_batch_size,
-        "train_batch_size": args.train_batch_size,
+        "train_batch_size": tune.grid_search(args.train_batch_size),
         "timesteps_per_iteration": args.timesteps_per_iteration,
     }
 

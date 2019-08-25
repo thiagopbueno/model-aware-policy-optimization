@@ -268,8 +268,8 @@ MAPOTFPolicy = build_tf_policy(
     stats_fn=extra_loss_fetches,
     optimizer_fn=create_separate_optimizers,
     gradients_fn=compute_separate_gradients,
-    apply_gradients_fn=apply_gradients_with_delays,
-    # apply_gradients_fn=apply_gradients_fn,
+    # apply_gradients_fn=apply_gradients_with_delays,
+    apply_gradients_fn=apply_gradients_fn,
     make_model=build_mapo_network,
     action_sampler_fn=main_actor_output,
 )
