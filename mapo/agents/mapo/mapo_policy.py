@@ -77,6 +77,11 @@ def extra_loss_fetches(policy, _):
     return policy.loss_stats
 
 
+def extra_grad_fetches(policy, _):
+    """Add stats computed along with the compute gradients function."""
+    return policy.grad_stats
+
+
 def create_separate_optimizers(policy, config):
     """Initialize optimizers and global step for update operations."""
     # pylint: disable=unused-argument
@@ -138,7 +143,20 @@ def compute_separate_gradients(policy, optimizer, loss):
         critic=critic_grads_and_vars,
         actor=actor_grads_and_vars,
     )
+
+    policy.grad_stats = {}
+    _add_grad_stats(policy.grad_stats, "actor", actor_grads_and_vars)
+    _add_grad_stats(policy.grad_stats, "critic", critic_grads_and_vars)
+    _add_grad_stats(policy.grad_stats, "dynamics", dynamics_grads_and_vars)
+
     return dynamics_grads_and_vars + critic_grads_and_vars + actor_grads_and_vars
+
+
+def _add_grad_stats(stats, network, grads_and_vars):
+    """Add grad norms in stats for network variables."""
+    for grad, var in grads_and_vars:
+        name = "{}_grad_norm_{}".format(network, var.name)
+        stats[name] = tf.norm(grad)
 
 
 def _apply_gradient_n_times(sgd_iter, apply_gradient_op):
@@ -266,6 +284,7 @@ MAPOTFPolicy = build_tf_policy(
     get_default_config=get_default_config,
     postprocess_fn=compute_return,
     stats_fn=extra_loss_fetches,
+    grad_stats_fn=extra_grad_fetches,
     optimizer_fn=create_separate_optimizers,
     gradients_fn=compute_separate_gradients,
     # apply_gradients_fn=apply_gradients_with_delays,
