@@ -27,7 +27,7 @@ class MAPOTFCustomEnv(gym.Env):
 
         self._graph = tf.Graph()
         self._build_ops()
-        self._sess = tf.Session(graph=self._graph)
+        self._sess = tf.compat.v1.Session(graph=self._graph)
 
     def _build_ops(self):
 

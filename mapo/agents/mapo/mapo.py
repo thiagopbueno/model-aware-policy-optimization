@@ -92,9 +92,22 @@ def validate_config(config):
     }, "Unknown model_loss '{}' (try 'mle' or 'pga')".format(config["model_loss"])
 
 
+# def after_optimizer_step(trainer, fetches):
+#     summaries = fetches["summaries"]
+#     del fetches["summaries"]
+#     tf_logger = next(
+#         logger
+#         for logger in trainer._result_logger._loggers
+#         if isinstance(logger, TFLogger)
+#     )
+#     time = fetches.get(TIMESTEPS_TOTAL) or fetches[TRAINING_ITERATION]
+#     tf_logger._file_writer.add_summary(summaries, time)
+
+
 MAPOTrainer = build_trainer(
     name="MAPO",
     default_policy=MAPOTFPolicy,
     default_config=DEFAULT_CONFIG,
     validate_config=validate_config,
+    # after_optimizer_step=after_optimizer_step,
 )

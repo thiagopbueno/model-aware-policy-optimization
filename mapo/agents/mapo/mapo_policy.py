@@ -74,7 +74,12 @@ def compute_return(policy, sample_batch, other_agent_batches=None, episode=None)
 
 def extra_loss_fetches(policy, _):
     """Add stats computed along with the loss function."""
-    return policy.loss_stats
+    with tf.name_scope("summaries"):
+        with tf.name_scope("actor"):
+            for var in policy.model.actor_variables:
+                tf.compat.v1.summary.histogram("histogram", var)
+        merged = tf.compat.v1.summary.merge_all()
+    return {**policy.loss_stats, "summaries": merged}
 
 
 def extra_grad_fetches(policy, _):
@@ -290,6 +295,24 @@ def main_actor_output(policy, model, input_dict, obs_space, action_space, config
     )
 
 
+# class ParamsSummaryMixin:
+#     # pylint: disable=missing-docstring, too-few-public-methods
+#     def __init__(self):
+#         with tf.name_scope("summaries"):
+#             with tf.name_scope("actor"):
+#                 for var in self.model.actor_variables:
+#                     tf.compat.v1.summary.histogram("histogram", var)
+#             self.merged = tf.compat.v1.summary.merge_all()
+
+#     def actor_variables_histogram(self):
+#         return self.get_session().run(self.merged)
+
+
+# def after_init(policy, obs_space, action_space, config):
+#     # pylint: disable=missing-docstring, unused-argument
+#     ParamsSummaryMixin.__init__(policy)
+
+
 MAPOTFPolicy = build_tf_policy(
     name="MAPOTFPolicy",
     loss_fn=build_mapo_losses,
@@ -302,4 +325,6 @@ MAPOTFPolicy = build_tf_policy(
     apply_gradients_fn=apply_gradients_fn,
     make_model=build_mapo_network,
     action_sampler_fn=main_actor_output,
+    # mixins=[ParamsSummaryMixin],
+    # after_init=after_init,
 )
