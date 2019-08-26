@@ -84,18 +84,20 @@ def _var_name(var):
 
 def extra_grad_fetches(policy, _):
     """Add stats computed along with the compute gradients function."""
-    grads_and_vars = policy.all_grads_and_vars
+    if not policy.config["debug"]:
+        return {}
+    all_grads_and_vars = policy.all_grads_and_vars
 
-    if not policy.config["use_true_dynamics"]:
-        for grad, var in grads_and_vars.dynamics:
+    def grad_and_vars_stats(grads_and_vars):
+        for grad, var in grads_and_vars:
             tf.compat.v1.summary.histogram(_var_name(grad), grad)
             tf.compat.v1.summary.histogram(_var_name(var), var)
-    for grad, var in grads_and_vars.critic:
-        tf.compat.v1.summary.histogram(_var_name(grad), grad)
-        tf.compat.v1.summary.histogram(_var_name(var), var)
-    for grad, var in grads_and_vars.actor:
-        tf.compat.v1.summary.histogram(_var_name(grad), grad)
-        tf.compat.v1.summary.histogram(_var_name(var), var)
+            tf.compat.v1.summary.scalar(_var_name(grad) + "/norm", tf.norm(grad))
+
+    if not policy.config["use_true_dynamics"]:
+        grad_and_vars_stats(all_grads_and_vars.dynamics)
+    grad_and_vars_stats(all_grads_and_vars.critic)
+    grad_and_vars_stats(all_grads_and_vars.actor)
 
     merged = tf.compat.v1.summary.merge_all()
     return {"summaries": merged}
@@ -151,7 +153,11 @@ def compute_separate_gradients(policy, optimizer, loss):
     )
 
     def grads_and_vars(loss, optim, variables):
-        return list(zip(optim.get_gradients(loss, variables), variables))
+        grads = [
+            tf.clip_by_value(grad, -1.0, 1.0)
+            for grad in optim.get_gradients(loss, variables)
+        ]
+        return list(zip(grads, variables))
 
     if config["use_true_dynamics"]:
         dynamics_grads_and_vars = []
@@ -172,20 +178,7 @@ def compute_separate_gradients(policy, optimizer, loss):
         actor=actor_grads_and_vars,
     )
 
-    # policy.grad_stats = {}
-    # if config["debug"]:
-    #     _add_grad_stats(policy.grad_stats, "actor", actor_grads_and_vars)
-    #     _add_grad_stats(policy.grad_stats, "critic", critic_grads_and_vars)
-    #     _add_grad_stats(policy.grad_stats, "dynamics", dynamics_grads_and_vars)
-
     return dynamics_grads_and_vars + critic_grads_and_vars + actor_grads_and_vars
-
-
-def _add_grad_stats(stats, network, grads_and_vars):
-    """Add grad norms in stats for network variables."""
-    for grad, var in grads_and_vars:
-        name = "{}_grad_norm_{}".format(network, var.name)
-        stats[name] = tf.norm(grad)
 
 
 def _apply_gradient_n_times(sgd_iter, apply_gradient_op):

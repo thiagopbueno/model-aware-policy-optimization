@@ -96,17 +96,19 @@ def validate_config(config):
 
 def after_init(trainer):
     # pylint: disable=missing-docstring
-    trainer.tf_writer = tf.compat.v1.summary.FileWriter(
-        osp.join(trainer.logdir, "histograms")
-    )
+    if trainer.config["debug"]:
+        trainer.tf_writer = tf.compat.v1.summary.FileWriter(
+            osp.join(trainer.logdir, "histograms")
+        )
 
 
 def after_optimizer_step(trainer, fetches):
     # pylint: disable=missing-docstring
-    trainer.tf_writer.add_summary(
-        fetches.pop("summaries"), trainer.optimizer.num_steps_sampled
-    )
-    trainer.tf_writer.flush()
+    if trainer.config["debug"]:
+        trainer.tf_writer.add_summary(
+            fetches.pop("summaries"), trainer.optimizer.num_steps_sampled
+        )
+        trainer.tf_writer.flush()
 
 
 MAPOTrainer = build_trainer(
