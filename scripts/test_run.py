@@ -2,6 +2,8 @@
 
 import numpy as np
 
+from mapo.logger import DEFAULT_LOGGERS
+
 
 def main():
     """Run MAPO."""
@@ -16,7 +18,7 @@ def main():
     tune.run(
         "MAPO",
         stop={"timesteps_total": int(2e5)},
-        num_samples=20,
+        num_samples=1,
         config={
             # === COMMON CONFIG ===
             "env": "Navigation-v0",
@@ -47,9 +49,11 @@ def main():
             "actor_lr": tune.function(lambda: np.random.uniform(low=1e-3, high=1e-2)),
             "actor_delay": 80,
             "critic_delay": 1,
+            "debug": True,
         },
         checkpoint_freq=20,
         checkpoint_at_end=True,
+        loggers=DEFAULT_LOGGERS,
     )
 
 
