@@ -1,4 +1,5 @@
 """ModelV2 for MAPO."""
+import tensorflow as tf
 from ray.rllib.models.tf.tf_modelv2 import TFModelV2
 from ray.rllib.utils.annotations import override
 
@@ -34,28 +35,32 @@ class MAPOModel(TFModelV2):  # pylint: disable=abstract-method
         # Ignore num_outputs as we don't use a shared state preprocessor
         output_dim = sum(obs_space.shape)
         super().__init__(obs_space, action_space, output_dim, model_config, name)
-
         self.options = model_config["custom_options"]
         models = {}
-        models["policy"] = build_deterministic_policy(
-            obs_space, action_space, **self.options["actor"]
-        )
-        models["q_net"] = build_continuous_q_function(
-            obs_space, action_space, **self.options["critic"]
-        )
-        self.twin_q = twin_q
-        if twin_q:
-            models["twin_q_net"] = build_continuous_q_function(
+
+        with tf.name_scope("actor"):
+            models["policy"] = build_deterministic_policy(
+                obs_space, action_space, **self.options["actor"]
+            )
+
+        with tf.name_scope("critic"):
+            models["q_net"] = build_continuous_q_function(
                 obs_space, action_space, **self.options["critic"]
             )
+            self.twin_q = twin_q
+            if twin_q:
+                models["twin_q_net"] = build_continuous_q_function(
+                    obs_space, action_space, **self.options["critic"]
+                )
 
         if create_dynamics:
-            models["dynamics"] = GaussianDynamicsModel(
-                obs_space, action_space, **self.options["dynamics"]
-            )
-            # Hack to create dynamics variables on initialization
+            with tf.name_scope("dynamics"):
+                models["dynamics"] = GaussianDynamicsModel(
+                    obs_space, action_space, **self.options["dynamics"]
+                )
+                # Hack to create dynamics variables on initialization
 
-            models["dynamics"]([obs_input(obs_space), action_input(action_space)])
+                models["dynamics"]([obs_input(obs_space), action_input(action_space)])
 
         self.models = models
         self.register_variables(

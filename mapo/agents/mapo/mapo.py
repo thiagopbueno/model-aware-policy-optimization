@@ -1,7 +1,8 @@
 """Exports MAPOTrainer."""
-
+import os.path as osp
 import logging
 
+import tensorflow as tf
 from ray.rllib.agents.trainer import with_common_config
 from ray.rllib.agents.trainer_template import build_trainer
 from ray.rllib.models import MODEL_DEFAULTS
@@ -93,9 +94,26 @@ def validate_config(config):
     }, "Unknown model_loss '{}' (try 'mle' or 'pga')".format(config["model_loss"])
 
 
+def after_init(trainer):
+    # pylint: disable=missing-docstring
+    trainer.tf_writer = tf.compat.v1.summary.FileWriter(
+        osp.join(trainer.logdir, "histograms")
+    )
+
+
+def after_optimizer_step(trainer, fetches):
+    # pylint: disable=missing-docstring
+    trainer.tf_writer.add_summary(
+        fetches.pop("summaries"), trainer.optimizer.num_steps_sampled
+    )
+    trainer.tf_writer.flush()
+
+
 MAPOTrainer = build_trainer(
     name="MAPO",
     default_policy=MAPOTFPolicy,
     default_config=DEFAULT_CONFIG,
     validate_config=validate_config,
+    after_init=after_init,
+    after_optimizer_step=after_optimizer_step,
 )
