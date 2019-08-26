@@ -48,6 +48,8 @@ DEFAULT_CONFIG = with_common_config(
         "actor_optimizer": "Adam",
         "critic_optimizer": "Adam",
         "dynamics_optimizer": "Adam",
+        # Clip gradients to be within this norm
+        "max_grad_norm": float("inf"),
         # Whether to update components using separate "sgd_iter"s for each or
         # apply "delayed" updates to each.
         "apply_gradients": "delayed",

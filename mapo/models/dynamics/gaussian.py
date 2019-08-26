@@ -106,7 +106,6 @@ class GaussianDynamicsModel(keras.Model):
         """Returns the scalar log-probability for the transition given by
         (state, action, next_state)."""
         if isinstance(state, (tuple, list)):
-            state, _ = state
             next_state, _ = next_state
         dist = self.dist(state, action)
         log_probs = dist.log_prob(next_state)

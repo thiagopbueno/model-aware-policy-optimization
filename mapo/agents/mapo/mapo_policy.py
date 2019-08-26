@@ -90,9 +90,9 @@ def extra_grad_fetches(policy, _):
 
     def grad_and_vars_stats(grads_and_vars):
         for grad, var in grads_and_vars:
-            tf.compat.v1.summary.histogram(_var_name(grad), grad)
             tf.compat.v1.summary.histogram(_var_name(var), var)
-            tf.compat.v1.summary.scalar(_var_name(grad) + "/norm", tf.norm(grad))
+            tf.compat.v1.summary.histogram(_var_name(var) + "_grad", grad)
+            tf.compat.v1.summary.scalar(_var_name(var) + "_gnorm", tf.norm(grad))
 
     if not policy.config["use_true_dynamics"]:
         grad_and_vars_stats(all_grads_and_vars.dynamics)
@@ -153,7 +153,11 @@ def compute_separate_gradients(policy, optimizer, loss):
     )
 
     def grads_and_vars(loss, optim, variables):
-        return list(zip(optim.get_gradients(loss, variables), variables))
+        grads = [
+            tf.clip_by_norm(grad, config["max_grad_norm"])
+            for grad in optim.get_gradients(loss, variables)
+        ]
+        return list(zip(grads, variables))
 
     if config["use_true_dynamics"]:
         dynamics_grads_and_vars = []
