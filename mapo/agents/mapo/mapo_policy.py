@@ -74,17 +74,33 @@ def compute_return(policy, sample_batch, other_agent_batches=None, episode=None)
 
 def extra_loss_fetches(policy, _):
     """Add stats computed along with the loss function."""
-    with tf.name_scope("summaries"):
-        with tf.name_scope("actor"):
-            for var in policy.model.actor_variables:
-                tf.compat.v1.summary.histogram("histogram", var)
-        merged = tf.compat.v1.summary.merge_all()
-    return {**policy.loss_stats, "summaries": merged}
+    return policy.loss_stats
+
+
+def _var_name(var):
+    # pylint: disable=missing-docstring
+    return "/".join(var.name.split("/")[1:])
 
 
 def extra_grad_fetches(policy, _):
     """Add stats computed along with the compute gradients function."""
-    return policy.grad_stats
+    if not policy.config["debug"]:
+        return {}
+    all_grads_and_vars = policy.all_grads_and_vars
+
+    def grad_and_vars_stats(grads_and_vars):
+        for grad, var in grads_and_vars:
+            tf.compat.v1.summary.histogram(_var_name(grad), grad)
+            tf.compat.v1.summary.histogram(_var_name(var), var)
+            tf.compat.v1.summary.scalar(_var_name(grad) + "/norm", tf.norm(grad))
+
+    if not policy.config["use_true_dynamics"]:
+        grad_and_vars_stats(all_grads_and_vars.dynamics)
+    grad_and_vars_stats(all_grads_and_vars.critic)
+    grad_and_vars_stats(all_grads_and_vars.actor)
+
+    merged = tf.compat.v1.summary.merge_all()
+    return {"summaries": merged}
 
 
 def create_separate_optimizers(policy, config):
@@ -92,11 +108,17 @@ def create_separate_optimizers(policy, config):
     # pylint: disable=unused-argument
     actor_optimizer_config = {
         "class_name": config["actor_optimizer"],
-        "config": {"learning_rate": config["actor_lr"]},
+        "config": {
+            "learning_rate": config["actor_lr"],
+            "name": "actor" + config["actor_optimizer"],
+        },
     }
     critic_optimizer_config = {
         "class_name": config["critic_optimizer"],
-        "config": {"learning_rate": config["critic_lr"]},
+        "config": {
+            "learning_rate": config["critic_lr"],
+            "name": "critic" + config["critic_optimizer"],
+        },
     }
     actor_optimizer = keras.optimizers.get(actor_optimizer_config)
     critic_optimizer = keras.optimizers.get(critic_optimizer_config)
@@ -106,7 +128,10 @@ def create_separate_optimizers(policy, config):
     else:
         dynamics_optimizer_config = {
             "class_name": config["dynamics_optimizer"],
-            "config": {"learning_rate": config["dynamics_lr"]},
+            "config": {
+                "learning_rate": config["dynamics_lr"],
+                "name": "dynamics" + config["dynamics_optimizer"],
+            },
         }
         dynamics_optimizer = keras.optimizers.get(dynamics_optimizer_config)
 
@@ -149,20 +174,7 @@ def compute_separate_gradients(policy, optimizer, loss):
         actor=actor_grads_and_vars,
     )
 
-    policy.grad_stats = {}
-    if config["debug"]:
-        _add_grad_stats(policy.grad_stats, "actor", actor_grads_and_vars)
-        _add_grad_stats(policy.grad_stats, "critic", critic_grads_and_vars)
-        _add_grad_stats(policy.grad_stats, "dynamics", dynamics_grads_and_vars)
-
     return dynamics_grads_and_vars + critic_grads_and_vars + actor_grads_and_vars
-
-
-def _add_grad_stats(stats, network, grads_and_vars):
-    """Add grad norms in stats for network variables."""
-    for grad, var in grads_and_vars:
-        name = "{}_grad_norm_{}".format(network, var.name)
-        stats[name] = tf.norm(grad)
 
 
 def _apply_gradient_n_times(sgd_iter, apply_gradient_op):
