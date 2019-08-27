@@ -64,7 +64,7 @@ class GaussianConstantStdDevDynamicsModel(keras.Model):
         self.mean_output_layer = Dense(
             logit_dim, kernel_initializer=output_kernel_initializer
         )
-        self.log_stddev_output = self.add_variable(
+        self.log_stddev_output = self.add_weight(
             "log_stddev", shape=(logit_dim,), dtype=tf.float32, initializer="zeros"
         )
 
