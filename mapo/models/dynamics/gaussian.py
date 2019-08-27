@@ -7,6 +7,7 @@ import tensorflow_probability as tfp
 
 from ray.rllib.utils.annotations import override
 from mapo.models.layers import TimeAwareObservationLayer, TimeConcatObservationLayer
+from mapo.models.fcnet import DEFAULT_CONFIG
 from mapo.envs import increment_one_hot_time
 
 
@@ -35,7 +36,7 @@ class GaussianDynamicsModel(keras.Model):
         self.obs_space = obs_space
         self.action_space = action_space
 
-        self.config = {**kwargs}
+        self.config = {**DEFAULT_CONFIG, **kwargs}
 
         # self.obs_layer = TimeAwareObservationLayer(
         #     self.obs_space,
@@ -46,27 +47,30 @@ class GaussianDynamicsModel(keras.Model):
         self.obs_layer = TimeConcatObservationLayer(self.obs_space, ignore_time=True)
 
         self.hidden_layers = []
-        activation = self.config.get("activation", "relu")
-        kernel_initializer = self.config.get("kernel_initializer", "orthogonal")
+        activation = self.config["activation"]
+        kernel_initializer = self.config["kernel_initializer"]
         for units in self.config["layers"]:
             self.hidden_layers.append(
                 Dense(
                     units, activation=activation, kernel_initializer=kernel_initializer
                 )
             )
-        output_kernel_initializer = self.config.get(
-            "output_kernel_initializer",
-            {"class_name": "orthogonal", "config": {"gain": 0.01}},
-        )
+
+        output_kernel_initializer = self.config["output_kernel_initializer"]
+        kernel_regularizer = self.config["kernel_regularizer"]
         if hasattr(self.obs_space, "original_space"):
             logit_dim = self.obs_space.original_space.spaces[0].shape[0]
         else:
             logit_dim = self.obs_space.shape[0]
         self.mean_output_layer = Dense(
-            logit_dim, kernel_initializer=output_kernel_initializer
+            logit_dim,
+            kernel_initializer=output_kernel_initializer,
+            kernel_regularizer=kernel_regularizer,
         )
         self.log_stddev_output_layer = Dense(
-            logit_dim, kernel_initializer=output_kernel_initializer
+            logit_dim,
+            kernel_initializer=output_kernel_initializer,
+            kernel_regularizer=kernel_regularizer,
         )
 
     @override(keras.models.Model)

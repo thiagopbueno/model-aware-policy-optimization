@@ -11,6 +11,8 @@ DEFAULT_CONFIG = {
     "layer_normalization": False,
     # Valid options: keras initializer name or config dict
     "kernel_initializer": {"class_name": "orthogonal", "config": {"gain": np.sqrt(2)}},
+    # Weight regularization
+    "kernel_regularizer": keras.regularizers.l1_l2(l1=0.01, l2=0.01),
     # Size of the output layer, if any
     "output_layer": None,
     # Valid options: keras activation name or config dict
@@ -32,12 +34,17 @@ def build_fcnet(config):
     activation = config["activation"]
     layer_norm = config["layer_normalization"]
     kernel_initializer = config["kernel_initializer"]
+    kernel_regularizer = config["kernel_regularizer"]
 
     model = keras.Sequential()
     for units in config["layers"]:
         if layer_norm:
             model.add(
-                keras.layers.Dense(units=units, kernel_initializer=kernel_initializer)
+                keras.layers.Dense(
+                    units=units,
+                    kernel_initializer=kernel_initializer,
+                    kernel_regularizer=kernel_regularizer,
+                )
             )
             model.add(keras.layers.LayerNormalization())
             model.add(keras.activations.get(activation))
@@ -47,6 +54,7 @@ def build_fcnet(config):
                     units=units,
                     activation=activation,
                     kernel_initializer=kernel_initializer,
+                    kernel_regularizer=kernel_regularizer,
                 )
             )
     if config["output_layer"]:
@@ -55,6 +63,7 @@ def build_fcnet(config):
                 units=config["output_layer"],
                 activation=config["output_activation"],
                 kernel_initializer=config["output_kernel_initializer"],
+                kernel_regularizer=kernel_regularizer,
             )
         )
     return model
