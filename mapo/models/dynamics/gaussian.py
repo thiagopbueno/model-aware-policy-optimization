@@ -27,6 +27,8 @@ class GaussianDynamicsModel(keras.Model):
         activation(tf.Tensor): An activation function op.
     """
 
+    # pylint: disable=too-many-instance-attributes
+
     def __init__(self, obs_space, action_space, **kwargs):
         super(GaussianDynamicsModel, self).__init__()
 
@@ -77,12 +79,15 @@ class GaussianDynamicsModel(keras.Model):
         Return:
             Tuple(tf.Tensor, tf.Tensor): A pair of tensors (mean, log_stddev).
         """
+        # pylint: disable=unused-argument,attribute-defined-outside-init
         obs, actions = inputs
         obs = self.obs_layer(obs)
         inputs = keras.layers.Concatenate(axis=-1)([obs, actions])
         for layer in self.hidden_layers:
             inputs = layer(inputs)
-        outputs = (self.mean_output_layer(inputs), self.log_stddev_output_layer(inputs))
+        self.log_stddev = self.log_stddev_output_layer(inputs)
+        self.mean = self.mean_output_layer(inputs)
+        outputs = (self.mean, self.log_stddev)
         return outputs
 
     def dist(self, state, action):

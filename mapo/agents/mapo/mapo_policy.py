@@ -92,14 +92,21 @@ def extra_grad_fetches(policy, _):
 
     def grad_and_vars_stats(grads_and_vars):
         for grad, var in grads_and_vars:
+            tf.compat.v1.summary.histogram(_var_name(grad), grad)
             tf.compat.v1.summary.histogram(_var_name(var), var)
-            tf.compat.v1.summary.histogram(_var_name(var) + "_grad", grad)
-            tf.compat.v1.summary.scalar(_var_name(var) + "_gnorm", tf.norm(grad))
+            tf.compat.v1.summary.scalar(_var_name(grad) + "/norm", tf.norm(grad))
 
     if not policy.config["use_true_dynamics"]:
         grad_and_vars_stats(all_grads_and_vars.dynamics)
     grad_and_vars_stats(all_grads_and_vars.critic)
     grad_and_vars_stats(all_grads_and_vars.actor)
+
+    dynamics_model = policy.model.models["dynamics"]
+    log_stddev = dynamics_model.log_stddev
+    abs_log_stddev = tf.abs(log_stddev)
+    min_abs_log_stddev = tf.reduce_min(abs_log_stddev)
+    with tf.name_scope("dynamics_model/log_stddev"):
+        tf.compat.v1.summary.scalar("min_abs_log_stddev", min_abs_log_stddev)
 
     merged = tf.compat.v1.summary.merge_all()
     return {"summaries": merged}
