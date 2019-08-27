@@ -35,6 +35,7 @@ def build_mapo_losses(policy, batch_tensors):
     env = _global_registry.get(ENV_CREATOR, config["env"])(config["env_config"])
 
     actor_loss = losses.actor_model_aware_loss(batch_tensors, model, env, config)
+    dynamics_fetches = {}
     if config["use_true_dynamics"]:
         dynamics_loss = None
     elif config["model_loss"] == "pga":
@@ -43,7 +44,6 @@ def build_mapo_losses(policy, batch_tensors):
         )
     else:
         dynamics_loss = losses.dynamics_mle_loss(batch_tensors, model)
-        dynamics_fetches = {}
     critic_loss, critic_fetches = losses.critic_return_loss(batch_tensors, model)
     policy.loss_stats = {}
     if not config["use_true_dynamics"]:
@@ -98,15 +98,16 @@ def extra_grad_fetches(policy, _):
 
     if not policy.config["use_true_dynamics"]:
         grad_and_vars_stats(all_grads_and_vars.dynamics)
+
+        dynamics_model = policy.model.models["dynamics"]
+        log_stddev = dynamics_model.log_stddev
+        abs_log_stddev = tf.abs(log_stddev)
+        min_abs_log_stddev = tf.reduce_min(abs_log_stddev)
+        with tf.name_scope("dynamics_model/log_stddev"):
+            tf.compat.v1.summary.scalar("min_abs_log_stddev", min_abs_log_stddev)
+
     grad_and_vars_stats(all_grads_and_vars.critic)
     grad_and_vars_stats(all_grads_and_vars.actor)
-
-    dynamics_model = policy.model.models["dynamics"]
-    log_stddev = dynamics_model.log_stddev
-    abs_log_stddev = tf.abs(log_stddev)
-    min_abs_log_stddev = tf.reduce_min(abs_log_stddev)
-    with tf.name_scope("dynamics_model/log_stddev"):
-        tf.compat.v1.summary.scalar("min_abs_log_stddev", min_abs_log_stddev)
 
     merged = tf.compat.v1.summary.merge_all()
     return {"summaries": merged}
