@@ -26,7 +26,14 @@ def l1_kernel(u, v, flat=False):
 
 def l2_kernel(u, v, flat=False):
     """Returns l-2 distance between `u` and `v` tensors."""
-    return _lp_kernel(u, v, flat, 2)
+    if flat:
+        u = _flat_and_concat(u)
+        v = _flat_and_concat(v)
+        kernel = tf.reduce_sum((u - v) ** 2)
+    else:
+        kernel = sum(tf.reduce_sum((u_i - v_i) ** 2) for (u_i, v_i) in zip(u, v))
+    return kernel
+    # return _lp_kernel(u, v, flat, 2)
 
 
 def linf_kernel(u, v, flat=False):
