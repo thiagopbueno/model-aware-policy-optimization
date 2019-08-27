@@ -3,7 +3,11 @@ from tensorflow import keras
 
 from mapo.models import obs_input
 from mapo.models.fcnet import build_fcnet
-from mapo.models.layers import ActionSquashingLayer, TimeAwareObservationLayer
+from mapo.models.layers import (
+    ActionSquashingLayer,
+    TimeAwareObservationLayer,
+    TimeConcatObservationLayer,
+)
 
 
 def build_deterministic_policy(
@@ -17,11 +21,12 @@ def build_deterministic_policy(
     """
     obs = obs_input(obs_space)
 
-    embedding_layer = TimeAwareObservationLayer(
-        obs_space,
-        obs_embedding_dim=obs_embedding_dim,
-        input_layer_norm=input_layer_norm,
-    )
+    # embedding_layer = TimeAwareObservationLayer(
+    #     obs_space,
+    #     obs_embedding_dim=obs_embedding_dim,
+    #     input_layer_norm=input_layer_norm,
+    # )
+    embedding_layer = TimeConcatObservationLayer(obs_space)
     fc_config = dict(kwargs, output_layer=action_space.shape[0])
     fc_model = build_fcnet(fc_config)
     action_layer = ActionSquashingLayer(action_space)

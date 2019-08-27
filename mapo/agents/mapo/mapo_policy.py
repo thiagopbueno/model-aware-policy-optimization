@@ -163,10 +163,7 @@ def compute_separate_gradients(policy, optimizer, loss):
     )
 
     def grads_and_vars(loss, optim, variables):
-        grads = [
-            tf.clip_by_norm(grad, config["max_grad_norm"])
-            for grad in optim.get_gradients(loss, variables)
-        ]
+        grads = optim.get_gradients(loss, variables)
         return list(zip(grads, variables))
 
     if config["use_true_dynamics"]:
