@@ -21,8 +21,8 @@ def dynamics_mle_loss(batch_tensors, model):
 def dynamics_pga_loss(batch_tensors, model, actor_loss, config):
     """Compute Policy Gradient Aware dynamics loss"""
     gmapo = tf.gradients(actor_loss, model.actor_variables)
-    dpg_loss, fetches = actor_dpg_loss(batch_tensors, model)
-    dpg = tf.gradients(dpg_loss, model.actor_variables)
+    dpg_loss, fetches = actor_dpg_loss(batch_tensors, model, use_target=True)
+    dpg = tf.gradients(dpg_loss, model.target_models["policy"].variables)
     kernel = KERNELS[config["kernel"]]
     return kernel(gmapo, dpg), fetches
 
@@ -103,16 +103,16 @@ def critic_return_loss(batch_tensors, model):
     return q_loss_criterion(q_pred, returns), fetches
 
 
-def actor_dpg_loss(batch_tensors, model):
+def actor_dpg_loss(batch_tensors, model, use_target=False):
     """Compute deterministic policy gradient loss."""
     obs = batch_tensors[SampleBatch.CUR_OBS]
-    policy_action = model.compute_actions(obs)
-    policy_action_value = model.compute_q_values(obs, policy_action)
+    policy_action = model.compute_actions(obs, target=use_target)
+    policy_action_value = model.compute_q_values(obs, policy_action, target=use_target)
     dpg = -tf.reduce_mean(policy_action_value)
     fetches = {
-        "q_pi_mean": -dpg,
-        "q_pi_max": tf.reduce_max(policy_action_value),
-        "q_pi_min": tf.reduce_min(policy_action_value),
+        "qt_pi_mean": -dpg,
+        "qt_pi_max": tf.reduce_max(policy_action_value),
+        "qt_pi_min": tf.reduce_min(policy_action_value),
     }
     return dpg, fetches
 

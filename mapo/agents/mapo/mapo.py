@@ -68,6 +68,12 @@ DEFAULT_CONFIG = with_common_config(
         "critic_delay": 1,
         # delayed policy update
         "actor_delay": 1,
+        # Critic target update frequency
+        "critic_target_update_freq": 1,
+        # Actor target update frequency
+        "actor_target_update_freq": 1,
+        # Polyak averaging coefficient
+        "tau": 1.0,
         # === Resources ===
         # Number of actors used for parallelism
         "num_workers": 0,

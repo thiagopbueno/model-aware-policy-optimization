@@ -188,8 +188,8 @@ def compute_separate_gradients(policy, optimizer, loss):
     return dynamics_grads_and_vars + critic_grads_and_vars + actor_grads_and_vars
 
 
-def _apply_gradient_n_times(sgd_iter, apply_gradient_op):
-    """Apply gradient op `sgd_iter` times in a while loop."""
+def apply_op_n_times(sgd_iter, apply_op):
+    """Apply op `sgd_iter` times in a while loop."""
     # pylint: disable=invalid-name
     i0 = tf.constant(0)
 
@@ -197,8 +197,8 @@ def _apply_gradient_n_times(sgd_iter, apply_gradient_op):
         return tf.less(i, sgd_iter)
 
     def body(i):
-        apply_op = apply_gradient_op()
-        with tf.control_dependencies([apply_op]):
+        app_op = apply_op()
+        with tf.control_dependencies([app_op]):
             inc_op = tf.add(i, 1)
         return inc_op
 
@@ -211,24 +211,69 @@ def apply_gradients_n_times(policy, optimizer, grads_and_vars):
     config = policy.config
     global_step = policy.global_step
     grads_and_vars = policy.all_grads_and_vars
+    model = policy.model
+
+    def update_critic_fn():
+        apply_grads = optimizer.critic.apply_gradients(grads_and_vars.critic)
+        with tf.control_dependencies([apply_grads]):
+            should_update_target = tf.equal(
+                tf.math.mod(
+                    optimizer.critic.iterations, config["critic_target_update_freq"]
+                ),
+                0,
+            )
+
+            def update_target_fn():
+                update_target_expr = [
+                    target.assign(config["tau"] * main + (1.0 - config["tau"]) * target)
+                    for main, target in zip(
+                        model.models["q_net"].variables,
+                        model.target_models["q_net"].variables,
+                    )
+                ]
+                return tf.group(*update_target_expr)
+
+            update_target = tf.cond(
+                should_update_target, true_fn=update_target_fn, false_fn=tf.no_op
+            )
+        return tf.group(apply_grads, update_target)
 
     with tf.control_dependencies([global_step.assign_add(1)]):
-        critic_op = _apply_gradient_n_times(
-            config["critic_sgd_iter"],
-            lambda: optimizer.critic.apply_gradients(grads_and_vars.critic),
-        )
+        critic_op = apply_op_n_times(config["critic_sgd_iter"], update_critic_fn)
 
     with tf.control_dependencies([critic_op]):
         if config["use_true_dynamics"]:
             dynamics_op = tf.no_op()
         else:
-            dynamics_op = _apply_gradient_n_times(
+            dynamics_op = apply_op_n_times(
                 config["dynamics_sgd_iter"],
                 lambda: optimizer.dynamics.apply_gradients(grads_and_vars.dynamics),
             )
 
     with tf.control_dependencies([dynamics_op]):
-        actor_op = optimizer.actor.apply_gradients(grads_and_vars.actor)
+        apply_actor_op = optimizer.actor.apply_gradients(grads_and_vars.actor)
+        with tf.control_dependencies([apply_actor_op]):
+            should_update_target = tf.equal(
+                tf.math.mod(
+                    optimizer.actor.iterations, config["actor_target_update_freq"]
+                ),
+                0,
+            )
+
+            def update_target_fn():
+                update_target_expr = [
+                    target.assign(config["tau"] * main + (1.0 - config["tau"]) * target)
+                    for main, target in zip(
+                        model.models["policy"].variables,
+                        model.target_models["policy"].variables,
+                    )
+                ]
+                return tf.group(*update_target_expr)
+
+            update_actor_target = tf.cond(
+                should_update_target, true_fn=update_target_fn, false_fn=tf.no_op
+            )
+        actor_op = tf.group(apply_actor_op, update_actor_target)
 
     return tf.group(critic_op, dynamics_op, actor_op)
 
@@ -305,6 +350,8 @@ def build_mapo_network(policy, obs_space, action_space, config):
         framework="tf",
         name="mapo_model",
         create_dynamics=not config["use_true_dynamics"],
+        target_networks=True,
+        twin_q=False,
     )
 
 
