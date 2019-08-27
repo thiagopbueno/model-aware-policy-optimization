@@ -1,0 +1,9 @@
+{
+  "activation": "relu",
+  "layers": [
+    64
+  ],
+  "obs_embedding_dim": 64,
+  "input_layer_norm": false,
+  "layer_normalization": false
+}
