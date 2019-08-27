@@ -21,10 +21,10 @@ def dynamics_mle_loss(batch_tensors, model):
 def dynamics_pga_loss(batch_tensors, model, actor_loss, config):
     """Compute Policy Gradient Aware dynamics loss"""
     gmapo = tf.gradients(actor_loss, model.actor_variables)
-    dpg_loss = actor_dpg_loss(batch_tensors, model)
+    dpg_loss, fetches = actor_dpg_loss(batch_tensors, model)
     dpg = tf.gradients(dpg_loss, model.actor_variables)
     kernel = KERNELS[config["kernel"]]
-    return kernel(gmapo, dpg)
+    return kernel(gmapo, dpg), fetches
 
 
 def _build_critic_targets(batch_tensors, model, config):
@@ -108,7 +108,13 @@ def actor_dpg_loss(batch_tensors, model):
     obs = batch_tensors[SampleBatch.CUR_OBS]
     policy_action = model.compute_actions(obs)
     policy_action_value = model.compute_q_values(obs, policy_action)
-    return -tf.reduce_mean(policy_action_value)
+    dpg = -tf.reduce_mean(policy_action_value)
+    fetches = {
+        "q_pi_mean": -dpg,
+        "q_pi_max": tf.reduce_max(policy_action_value),
+        "q_pi_min": tf.reduce_min(policy_action_value),
+    }
+    return dpg, fetches
 
 
 def pd_madpg_estimator(batch_tensors, model, env, config):
