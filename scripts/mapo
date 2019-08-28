@@ -8,7 +8,6 @@ import argparse
 import json
 import ray
 from ray import tune
-from mapo.logger import DEFAULT_LOGGERS
 from mapo import register_all_agents, register_all_environments
 from mapo.version import __version__
 
@@ -560,7 +559,6 @@ def run(args):
         trial_name_creator=tune.function(trial_name_creator),
         checkpoint_freq=10,
         checkpoint_at_end=True,
-        loggers=DEFAULT_LOGGERS,
     )
 
     return analysis
