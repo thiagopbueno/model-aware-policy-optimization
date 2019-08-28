@@ -3,13 +3,9 @@ import tensorflow as tf
 from ray.rllib.models.tf.tf_modelv2 import TFModelV2
 from ray.rllib.utils.annotations import override
 
-from mapo.models import obs_input, action_input
 from mapo.models.policy import build_deterministic_policy
 from mapo.models.q_function import build_continuous_q_function
-from mapo.models.dynamics import (
-    GaussianDynamicsModel,
-    GaussianConstantStdDevDynamicsModel,
-)
+from mapo.models.dynamics import build_dynamics_model
 
 
 class MAPOModel(TFModelV2):  # pylint: disable=abstract-method
@@ -58,12 +54,9 @@ class MAPOModel(TFModelV2):  # pylint: disable=abstract-method
 
         if create_dynamics:
             with tf.name_scope("dynamics"):
-                models["dynamics"] = GaussianConstantStdDevDynamicsModel(
+                models["dynamics"] = build_dynamics_model(
                     obs_space, action_space, **self.options["dynamics"]
                 )
-                # Hack to create dynamics variables on initialization
-
-                models["dynamics"]([obs_input(obs_space), action_input(action_space)])
 
         self.models = models
         self.register_variables(
