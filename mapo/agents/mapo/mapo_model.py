@@ -150,9 +150,11 @@ class MAPOModel(TFModelV2):  # pylint: disable=abstract-method
         """
         return self._get_model("twin_q_net", target)([obs, action])
 
-    def compute_state_values(self, obs):
+    def compute_state_values(self, obs, target=False):
         """Compute state values by composing policy and Q networks."""
-        return self.compute_q_values(obs, self.compute_actions(obs))
+        return self.compute_q_values(
+            obs, self.compute_actions(obs, target=target), target=target
+        )
 
     def rsample_next_states(self, obs, action, n_samples=1):
         """Compute reparameterized next state samples from the dynamics model."""
