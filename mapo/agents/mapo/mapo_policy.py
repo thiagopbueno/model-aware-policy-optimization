@@ -34,10 +34,6 @@ def build_mapo_losses(policy, batch_tensors):
     model, config = policy.model, policy.config
     env = _global_registry.get(ENV_CREATOR, config["env"])(config["env_config"])
 
-    policy.increment_critic_steps = policy.critic_steps.assign_add(
-        tf.shape(batch_tensors[SampleBatch.REWARDS])[0]
-    )
-
     dynamics_fetches = {}
     if config["use_true_dynamics"]:
         dynamics_loss = None
@@ -219,10 +215,6 @@ def apply_gradients_n_times(policy, optimizer, grads_and_vars):
     grads_and_vars = policy.all_grads_and_vars
     model = policy.model
 
-    critic_prep_done = tf.greater_equal(
-        policy.critic_steps, config["critic_preprocessing_steps"]
-    )
-
     # Update critic
     def update_critic_fn():
         apply_grads = optimizer.critic.apply_gradients(grads_and_vars.critic)
@@ -250,6 +242,7 @@ def apply_gradients_n_times(policy, optimizer, grads_and_vars):
         return tf.group(apply_grads, update_target)
 
     with tf.control_dependencies([global_step.assign_add(1)]):
+        critic_prep_done = tf.greater_equal(global_step, config["critic_prep_steps"])
         critic_op = apply_op_n_times(config["critic_sgd_iter"], update_critic_fn)
 
     # Update Dynamics
@@ -342,11 +335,10 @@ def apply_gradients_with_delays(policy, optimizer, grads_and_vars):
 
 def apply_gradients_fn(policy, optimizer, grads_and_vars):
     """Choose between 'sgd_iter' and 'delayed' strategies for applying gradients."""
-    with tf.control_dependencies([policy.increment_critic_steps]):
-        if policy.config["apply_gradients"] == "sgd_iter":
-            return apply_gradients_n_times(policy, optimizer, grads_and_vars)
-        if policy.config["apply_gradients"] == "delayed":
-            return apply_gradients_with_delays(policy, optimizer, grads_and_vars)
+    if policy.config["apply_gradients"] == "sgd_iter":
+        return apply_gradients_n_times(policy, optimizer, grads_and_vars)
+    if policy.config["apply_gradients"] == "delayed":
+        return apply_gradients_with_delays(policy, optimizer, grads_and_vars)
     raise ValueError(
         "Invalid apply gradients strategy '{}'. "
         "Try one of [sgd_iter, delayed]".format(policy.config["apply_gradients"])
@@ -366,8 +358,6 @@ def build_mapo_network(policy, obs_space, action_space, config):
             + "Consider reshaping this into a single dimension, using a Tuple action"
             "space, or the multi-agent API."
         )
-    policy.critic_steps = tf.Variable(0, trainable=False, name="critic_steps")
-
     return ModelCatalog.get_model_v2(
         obs_space,
         action_space,
