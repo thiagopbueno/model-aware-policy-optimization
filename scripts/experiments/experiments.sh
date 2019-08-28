@@ -22,6 +22,7 @@ NUM_SGD_ITER=1
 FCNET=fcnet-64-elu
 CONFIG_ACTOR_NET=$FCNET.json
 CONFIG_CRITIC_NET=$FCNET.json
+TAU="1.0"
 
 
 EXPERIMENT_LOG_DIR=~/ray_results/$TEST_RUN
@@ -87,7 +88,7 @@ if [ "$test_td3" = true ] ; then
         --debug
 fi
 
-if [ "$test_mapo_true_dynamicsr" = true ] ; then
+if [ "$test_mapo_true_dynamics" = true ] ; then
     EXPERIMENT=mapo-true-dynamics-$FCNET
     mapo --run MAPO --env $ENV --use-true-dynamics  \
         --config-actor-net $CONFIG_ACTOR_NET        \
@@ -162,6 +163,7 @@ if [ "$test_mapo_pga_linear_dynamics" = true ] ; then
         --num-cpus-for-driver $NUM_CPUS_FOR_DRIVER      \
         --num-gpus $NUM_GPUS                            \
         --name $TEST_RUN/$EXPERIMENT                    \
+        --tau $TAU                                      \
         --debug
 fi
 
@@ -216,6 +218,7 @@ if [ "$test_mapo_pga" = true ] ; then
         --timesteps-total $TIMESTEPS_TOTAL              \
         --num-cpus-for-driver $NUM_CPUS_FOR_DRIVER      \
         --num-gpus $NUM_GPUS                            \
+        --tau $TAU                                      \
         --name $TEST_RUN/$EXPERIMENT                    \
         --debug
 fi

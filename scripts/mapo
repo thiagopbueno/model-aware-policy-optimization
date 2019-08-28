@@ -240,8 +240,28 @@ def parse_args():
         "--dynamics-delay",
         type=int,
         default=20,
-        help="The number of traing steps before updating the dynamics"
+        help="The number of traing steps before updating the dynamics "
         "(default=%(default)s).",
+    )
+    optimizers_args_group.add_argument(
+        "--tau",
+        type=float,
+        nargs="+",
+        default=[1.0],
+        help="The exponential Polyak average coefficient for target updates "
+        "(default=%(default)s).",
+    )
+    optimizers_args_group.add_argument(
+        "--critic-target-update-freq",
+        type=int,
+        default=1,
+        help="The critic target update frequency (default=%(default)s).",
+    )
+    optimizers_args_group.add_argument(
+        "--actor-target-update-freq",
+        type=int,
+        default=1,
+        help="The actor target update frequency (default=%(default)s).",
     )
 
     exec_args_group = parser.add_argument_group(">> Execution")
@@ -410,6 +430,11 @@ def make_config(args):
     }
     if args.run == "MAPO":
         optimization_config["optimizer"] = {"num_sgd_iter": args.num_sgd_iter}
+        optimization_config["tau"] = tune.grid_search(args.tau)
+        optimization_config[
+            "critic_target_update_freq"
+        ] = args.critic_target_update_freq
+        optimization_config["actor_target_update_freq"] = args.actor_target_update_freq
 
     if args.run in ["MAPO", "OffMAPO"]:
         optimization_config["critic_sgd_iter"] = tune.grid_search(args.critic_sgd_iter)
@@ -430,6 +455,7 @@ def make_config(args):
         "sample_batch_size": args.sample_batch_size,
         "train_batch_size": tune.grid_search(args.train_batch_size),
         "timesteps_per_iteration": args.timesteps_per_iteration,
+        "log_level": "WARN",
     }
 
     # === Resources ===
