@@ -226,7 +226,18 @@ def apply_gradients_n_times(policy, optimizer, grads_and_vars):
                 0,
             )
 
-            def update_target_fn():
+            def reset_target_fn():
+                return tf.group(
+                    [
+                        target.assign(main)
+                        for main, target in zip(
+                            model.models["q_net"].variables,
+                            model.target_models["q_net"].variables,
+                        )
+                    ]
+                )
+
+            def soft_update_fn():
                 update_target_expr = [
                     target.assign(config["tau"] * main + (1.0 - config["tau"]) * target)
                     for main, target in zip(
@@ -234,7 +245,17 @@ def apply_gradients_n_times(policy, optimizer, grads_and_vars):
                         model.target_models["q_net"].variables,
                     )
                 ]
-                return tf.group(*update_target_expr)
+                update_all_target_variables = tf.group(*update_target_expr)
+                return update_all_target_variables
+
+            def update_target_fn():
+                return tf.cond(
+                    critic_target_should_reset,
+                    true_fn=reset_target_fn,
+                    false_fn=lambda: tf.cond(
+                        critic_prep_done, true_fn=soft_update_fn, false_fn=tf.no_op
+                    ),
+                )
 
             update_target = tf.cond(
                 should_update_target, true_fn=update_target_fn, false_fn=tf.no_op
@@ -242,7 +263,8 @@ def apply_gradients_n_times(policy, optimizer, grads_and_vars):
         return tf.group(apply_grads, update_target)
 
     with tf.control_dependencies([global_step.assign_add(1)]):
-        critic_prep_done = tf.greater_equal(global_step, config["critic_prep_steps"])
+        critic_target_should_reset = tf.equal(global_step, config["critic_prep_steps"])
+        critic_prep_done = tf.greater(global_step, config["critic_prep_steps"])
         critic_op = apply_op_n_times(config["critic_sgd_iter"], update_critic_fn)
 
     # Update Dynamics
