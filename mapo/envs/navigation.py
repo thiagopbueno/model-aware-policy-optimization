@@ -15,6 +15,7 @@ DEFAULT_CONFIG = {
     "action_upper_bound": [1.0, 1.0],
     "deceleration_zones": {"center": [[0.0, 0.0]], "decay": [2.0]},
     "noise": {"mean": [0.0, 0.0], "cov": [[0.3, 0.0], [0.0, 0.3]]},
+    "r_max": 100.0,
 }
 
 
@@ -71,6 +72,8 @@ class NavigationEnv(MAPOTFCustomEnv):
 
         self._noise = self._config["noise"]
 
+        self._r_max = self._config["r_max"]
+
         super(NavigationEnv, self).__init__(state_shape=(2,), action_shape=(2,))
 
     def render(self, mode="human"):
@@ -107,8 +110,9 @@ class NavigationEnv(MAPOTFCustomEnv):
     def _reward_fn(self, state, action, next_state):
         # pylint: disable=invalid-unary-operand-type
         goal = tf.constant(self._end, name="goal")
-        distance = -tf.norm(next_state - goal, axis=-1)
-        reward = 100 / (1 + distance)
+        r_max = tf.constant(self._r_max, name="r_max")
+        distance = tf.norm(next_state - goal, axis=-1)
+        reward = r_max / (1.0 + distance)
         return reward
 
     def _terminal(self):
