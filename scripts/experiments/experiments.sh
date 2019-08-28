@@ -22,7 +22,8 @@ NUM_SGD_ITER=1
 FCNET=fcnet-64-elu
 CONFIG_ACTOR_NET=$FCNET.json
 CONFIG_CRITIC_NET=$FCNET.json
-TAU="1e-4 5e-3"
+TAU="1.0"
+CRITIC_PREP_STEPS=15
 
 
 EXPERIMENT_LOG_DIR=~/ray_results/$TEST_RUN
@@ -52,6 +53,8 @@ NUM_SGD_ITER = $NUM_SGD_ITER
 FCNET = $FCNET
 CONFIG_ACTOR_NET = $CONFIG_ACTOR_NET
 CONFIG_CRITIC_NET = $CONFIG_CRITIC_NET
+TAU = $TAU
+CRITIC_PREP_STEPS = $CRITIC_PREP_STEPS
 END
 
 
@@ -164,6 +167,7 @@ if [ "$test_mapo_pga_linear_dynamics" = true ] ; then
         --num-gpus $NUM_GPUS                            \
         --name $TEST_RUN/$EXPERIMENT                    \
         --tau $TAU                                      \
+        --critic-prep-steps $CRITIC_PREP_STEPS          \
         --debug
 fi
 
@@ -219,6 +223,7 @@ if [ "$test_mapo_pga" = true ] ; then
         --num-cpus-for-driver $NUM_CPUS_FOR_DRIVER      \
         --num-gpus $NUM_GPUS                            \
         --tau $TAU                                      \
+        --critic-prep-steps $CRITIC_PREP_STEPS          \
         --name $TEST_RUN/$EXPERIMENT                    \
         --debug
 fi
