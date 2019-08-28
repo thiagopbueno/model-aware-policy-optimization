@@ -78,6 +78,8 @@ DEFAULT_CONFIG = with_common_config(
         "actor_target_update_freq": 1,
         # Polyak averaging coefficient
         "tau": 1.0,
+        # Number of starting steps to use for fitting the critic only
+        "critic_preprocessing_steps": 1000,
         # === Resources ===
         # Number of actors used for parallelism
         "num_workers": 0,
