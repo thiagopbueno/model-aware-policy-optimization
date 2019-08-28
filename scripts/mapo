@@ -125,6 +125,14 @@ def parse_args():
         "(default=%(default)s).",
     )
     optimizers_args_group.add_argument(
+        "--critic-prep-steps",
+        type=int,
+        nargs="+",
+        default=[10],
+        help="The number of training epochs before training actor and dynamics "
+        "(default=%(default)s).",
+    )
+    optimizers_args_group.add_argument(
         "--num-sgd-iter",
         type=int,
         default=80,
@@ -420,6 +428,7 @@ def make_config(args):
 
     # === Optimization ===
     optimization_config = {
+        "critic_prep_steps": tune.grid_search(args.critic_prep_steps),
         "apply_gradients": args.apply_gradients,
         "actor_optimizer": tune.grid_search(args.actor_optimizer),
         "critic_optimizer": tune.grid_search(args.critic_optimizer),
