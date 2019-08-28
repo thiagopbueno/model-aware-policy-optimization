@@ -15,7 +15,7 @@ DYNAMICS_MODELS = {
 def build_dynamics_model(obs_space, action_space, class_name=None, **config):
     """Returns the appropriate dynamics model based on config.
 
-    Calls the dynamics model on input placeholders to initialize variables.
+    Calls the dynamics model on input placeholders to instantiate variables.
     """
 
     obs, action = obs_input(obs_space), action_input(action_space)
