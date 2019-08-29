@@ -23,9 +23,13 @@ def spaces():
 def model_config():
     return {
         "custom_options": {
-            "actor": {"activation": "relu", "layers": [32, 32]},
-            "critic": {"activation": "relu", "layers": [32, 32]},
-            "dynamics": {"activation": "relu", "layers": [32, 32]},
+            "actor": {"activation": "relu", "layers": [10]},
+            "critic": {"activation": "relu", "layers": [10]},
+            "dynamics": {
+                "class_name": "GaussianConstantStdDevDynamicsModel",
+                "activation": "relu",
+                "layers": [10],
+            },
         }
     }
 

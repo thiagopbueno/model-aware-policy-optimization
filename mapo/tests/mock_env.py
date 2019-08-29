@@ -64,10 +64,13 @@ class MockEnv(MAPOTFCustomEnv):
 
     def _next_state_dist(self, state, action):  # pylint: disable=unused-argument
         return tfp.distributions.TruncatedNormal(
-            loc=tf.ones(self.observation_space.shape) * tf.norm(action, axis=-1),
+            loc=tf.ones(
+                tf.concat([tf.shape(action)[:-1], self.observation_space.shape], axis=0)
+            )
+            * tf.reduce_mean(action),
             scale=1.0,
-            low=self.observation_space.low,
-            high=self.observation_space.high,
+            low=self.observation_space.low[None],
+            high=self.observation_space.high[None],
         )
 
     def _terminal(self):
