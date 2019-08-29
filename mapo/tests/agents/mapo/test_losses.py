@@ -51,7 +51,11 @@ def model_config():
         "custom_options": {
             "actor": {"activation": "relu", "layers": [32, 32]},
             "critic": {"activation": "relu", "layers": [32, 32]},
-            "dynamics": {"activation": "relu", "layers": [32, 32]},
+            "dynamics": {
+                "class_name": "GaussianConstantStdDevDynamicsModel",
+                "activation": "relu",
+                "layers": [32, 32],
+            },
         }
     }
 
@@ -166,16 +170,15 @@ def test_dynamics_mle_loss(env, config, model_fn, batch_tensors_fn):
     assert SampleBatch.NEXT_OBS in batch_tensors.accessed_keys
 
 
-def test_dynamics_pga_loss(env, config, model_fn, batch_tensors_fn):
-    model = model_fn(env, config)
+def test_dynamics_pga_loss(env, config, model_with_targets_fn, batch_tensors_fn):
+    model = model_with_targets_fn(env, config)
     batch_tensors = batch_tensors_fn(env)
-    actor_loss = losses.actor_model_aware_loss(batch_tensors, model, env, config)
-    batch_tensors = UsageTrackingDict(batch_tensors)
-    loss = losses.dynamics_pga_loss(batch_tensors, model, actor_loss, config)
+    loss, fetches = losses.dynamics_pga_loss(batch_tensors, model, env, config)
     variables = model.dynamics_variables
 
     assert_consistent_shapes_and_grads(loss, variables)
     assert SampleBatch.CUR_OBS in batch_tensors.accessed_keys
+    assert isinstance(fetches, dict)
 
 
 def test_build_critic_targets(env, config, model_with_targets_fn, batch_tensors_fn):
@@ -196,18 +199,19 @@ def test_build_critic_targets(env, config, model_with_targets_fn, batch_tensors_
 def test_critic_1step_loss(env, config, model_with_targets_fn, batch_tensors_fn):
     model = model_with_targets_fn(env, config)
     batch_tensors = batch_tensors_fn(env)
-    loss, _ = losses.critic_1step_loss(batch_tensors, model, config)
+    loss, fetches = losses.critic_1step_loss(batch_tensors, model, config)
     variables = model.critic_variables
 
     assert_consistent_shapes_and_grads(loss, variables)
     assert SampleBatch.CUR_OBS in batch_tensors.accessed_keys
     assert SampleBatch.ACTIONS in batch_tensors.accessed_keys
+    assert isinstance(fetches, dict)
 
 
 def test_critic_return_loss(env, config, model_fn, batch_tensors_fn):
     model = model_fn(env, config)
     batch_tensors = batch_tensors_fn(env)
-    loss, _ = losses.critic_return_loss(batch_tensors, model)
+    loss, fetches = losses.critic_return_loss(batch_tensors, model)
 
     variables = model.critic_variables
     if model.twin_q:
@@ -217,16 +221,18 @@ def test_critic_return_loss(env, config, model_fn, batch_tensors_fn):
     assert SampleBatch.CUR_OBS in batch_tensors.accessed_keys
     assert SampleBatch.ACTIONS in batch_tensors.accessed_keys
     assert Postprocessing.ADVANTAGES in batch_tensors.accessed_keys
+    assert isinstance(fetches, dict)
 
 
 def test_actor_dpg_loss(env, config, model_fn, batch_tensors_fn):
     model = model_fn(env, config)
     batch_tensors = batch_tensors_fn(env)
-    loss = losses.actor_dpg_loss(batch_tensors, model)
+    loss, fetches = losses.actor_dpg_loss(batch_tensors, model)
     variables = model.actor_variables
 
     assert_consistent_shapes_and_grads(loss, variables)
     assert SampleBatch.CUR_OBS in batch_tensors.accessed_keys
+    assert isinstance(fetches, dict)
 
 
 def test_actor_model_aware_loss(env, config, model_fn, batch_tensors_fn, madpg_options):
