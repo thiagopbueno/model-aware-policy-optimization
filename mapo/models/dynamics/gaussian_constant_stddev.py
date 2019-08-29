@@ -6,7 +6,8 @@ from tensorflow.keras.layers import Dense
 import tensorflow_probability as tfp
 
 from ray.rllib.utils.annotations import override
-from mapo.models.layers import TimeAwareObservationLayer
+
+# from mapo.models.layers import TimeAwareObservationLayer
 from mapo.envs import increment_one_hot_time
 
 
@@ -37,12 +38,12 @@ class GaussianConstantStdDevDynamicsModel(keras.Model):
 
         self.config = {**kwargs}
 
-        self.obs_layer = TimeAwareObservationLayer(
-            self.obs_space,
-            obs_embedding_dim=self.config.get("obs_embedding_dim", 32),
-            input_layer_norm=self.config.get("input_layer_norm", False),
-            ignore_time=True,
-        )
+        # self.obs_layer = TimeAwareObservationLayer(
+        #     self.obs_space,
+        #     obs_embedding_dim=self.config.get("obs_embedding_dim", 32),
+        #     input_layer_norm=self.config.get("input_layer_norm", False),
+        #     ignore_time=True,
+        # )
 
         self.hidden_layers = []
         activation = self.config.get("activation", "relu")
@@ -81,7 +82,11 @@ class GaussianConstantStdDevDynamicsModel(keras.Model):
         """
         # pylint: disable=unused-argument,attribute-defined-outside-init
         obs, actions = inputs
-        obs = self.obs_layer(obs)
+        # obs = self.obs_layer(obs)
+
+        if isinstance(obs, (tuple, list)):
+            obs, _ = obs
+
         inputs = keras.layers.Concatenate(axis=-1)([obs, actions])
         for layer in self.hidden_layers:
             inputs = layer(inputs)
