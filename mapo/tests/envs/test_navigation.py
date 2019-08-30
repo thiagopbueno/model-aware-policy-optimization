@@ -136,9 +136,9 @@ def test_reward(env):
         dummy_state = env.observation_space.sample()
 
         reward = env._reward(dummy_state, dummy_action, env._end)
-        assert np.allclose(reward, 0.0)
+        assert np.allclose(reward, config["r_max"])
         reward = env._reward(dummy_state, dummy_action, env._start)
-        assert np.allclose(reward, -np.sqrt(2 * 20 ** 2))
+        assert np.allclose(reward, config["r_max"] / (1 + np.sqrt(2 * 20 ** 2)))
 
 
 def test_terminal(env):
