@@ -34,13 +34,19 @@ class MAPOTFCustomEnv(gym.Env):
         with self._graph.as_default():  # pylint: disable=not-context-manager
 
             self._state_placeholder = tf.compat.v1.placeholder(
-                tf.float32, shape=self.state_shape
+                tf.float32,
+                shape=self.state_shape,
+                name=type(self).__name__ + "_state_input",
             )
             self._action_placeholder = tf.compat.v1.placeholder(
-                tf.float32, shape=self.action_shape
+                tf.float32,
+                shape=self.action_shape,
+                name=type(self).__name__ + "_action_input",
             )
             self._next_state_placeholder = tf.compat.v1.placeholder(
-                tf.float32, shape=self.state_shape
+                tf.float32,
+                shape=self.state_shape,
+                name=type(self).__name__ + "_next_state_input",
             )
 
             next_state, log_prob = self._transition_fn(
