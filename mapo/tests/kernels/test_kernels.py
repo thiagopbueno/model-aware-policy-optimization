@@ -49,6 +49,7 @@ def test_l1_kernel(fcnet):
         assert np.allclose(d2_, expected_d1_)
 
 
+@pytest.mark.skip
 def test_l2_kernel(fcnet):
     u = fcnet.trainable_variables
     v = [2 * x for x in u]
