@@ -5,6 +5,5 @@ python:
 # command to install dependencies
 install:
   - pip install .
-  - pip install pytest-xdist
 # command to run tests
-script: pytest -n 2
+script: pytest
