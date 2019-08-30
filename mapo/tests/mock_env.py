@@ -69,8 +69,8 @@ class MockEnv(MAPOTFCustomEnv):
             )
             * tf.reduce_mean(action),
             scale=1.0,
-            low=self.observation_space.low[None],
-            high=self.observation_space.high[None],
+            low=self.observation_space.low,
+            high=self.observation_space.high,
         )
 
     def _terminal(self):
