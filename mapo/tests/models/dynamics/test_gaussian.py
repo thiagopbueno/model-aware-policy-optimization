@@ -126,13 +126,13 @@ def test_linear_gaussian_call(linear_model, inputs):
 
     _ = linear_model.call(inputs)
     assert len(linear_model.layers) == 3
-    assert len(linear_model.weights) == 6
-    assert len(linear_model.trainable_variables) == 6
+    assert len(linear_model.weights) == 4
+    assert len(linear_model.trainable_variables) == 4
 
     _ = linear_model.call(inputs)
     assert len(linear_model.layers) == 3
-    assert len(linear_model.weights) == 6
-    assert len(linear_model.trainable_variables) == 6
+    assert len(linear_model.weights) == 4
+    assert len(linear_model.trainable_variables) == 4
 
 
 def test_nonlinear_gaussian_call(nonlinear_model, inputs):
@@ -142,13 +142,13 @@ def test_nonlinear_gaussian_call(nonlinear_model, inputs):
 
     _ = nonlinear_model.call(inputs)
     assert len(nonlinear_model.layers) == 6
-    assert len(nonlinear_model.weights) == 12
-    assert len(nonlinear_model.trainable_variables) == 12
+    assert len(nonlinear_model.weights) == 10
+    assert len(nonlinear_model.trainable_variables) == 10
 
     _ = nonlinear_model.call(inputs)
     assert len(nonlinear_model.layers) == 6
-    assert len(nonlinear_model.weights) == 12
-    assert len(nonlinear_model.trainable_variables) == 12
+    assert len(nonlinear_model.weights) == 10
+    assert len(nonlinear_model.trainable_variables) == 10
 
 
 def test_gaussian_distribution(model, state, action):
